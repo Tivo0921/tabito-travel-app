@@ -8,7 +8,7 @@ interface SectionHeaderProps {
   actionLabel?: string;
 }
 
-export function SectionHeader({ title, subtitle, href, actionLabel = '더보기' }: SectionHeaderProps) {
+export function SectionHeader({ title, subtitle, href, actionLabel = 'もっと見る' }: SectionHeaderProps) {
   return (
     <div className="flex items-end justify-between mb-4">
       <div>

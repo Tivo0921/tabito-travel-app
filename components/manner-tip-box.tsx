@@ -14,14 +14,14 @@ export function MannerTipBox({ title, tips, variant = 'info' }: MannerTipBoxProp
       border: 'border-[var(--accent)]',
       icon: Info,
       iconColor: 'text-[var(--accent)]',
-      title: title || '매너 팁',
+      title: title || 'マナーtips',
     },
     do: {
       bg: 'bg-green-50',
       border: 'border-green-200',
       icon: Check,
       iconColor: 'text-green-600',
-      title: title || '이렇게 하세요',
+      title: title || 'こうしましょう',
     },
     dont: {
       bg: 'bg-red-50',

@@ -21,10 +21,10 @@ export default function MannerPage() {
       {/* Header */}
       <header className="px-5 pt-6 pb-4">
         <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">
-          매너 가이드
+          マナーガイド
         </h1>
         <p className="text-[var(--text-sub)]">
-          일본 여행에서 알아두면 좋은 에티켓
+          日本旅行で知っておきたいエチケット
         </p>
       </header>
 
@@ -32,20 +32,20 @@ export default function MannerPage() {
       <div className="px-5 mb-6">
         <div className="p-5 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-3xl">
           <p className="text-sm font-medium text-[var(--primary)] mb-1">
-            오늘의 매너 팁
+            今日のマナーtips
           </p>
           <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">
-            일본에서는 팁을 주지 않아요
+            日本ではチップを渡しません
           </h3>
           <p className="text-sm text-[var(--text-sub)]">
-            일본에서 팁을 주는 것은 오히려 실례가 될 수 있어요. 좋은 서비스에 감사하고 싶다면 친절한 인사로 표현하세요.
+            日本でチップを渡すことは、むしろ失礼になることがあります。良いサービスに感謝したい場合は、丁寧な挨拶で表現しましょう。
           </p>
         </div>
       </div>
 
       {/* Categories */}
       <section className="px-5 mb-8">
-        <SectionHeader title="카테고리" subtitle="상황별 매너 가이드" />
+        <SectionHeader title="カテゴリ" subtitle="상황별 マナーガイド" />
         <div className="grid grid-cols-2 gap-3">
           {mannerCategories.map((category) => {
             const Icon = iconMap[category.icon] || Landmark;
@@ -79,7 +79,7 @@ export default function MannerPage() {
 
       {/* Popular Tips */}
       <section className="px-5 mb-8">
-        <SectionHeader title="인기 매너 팁" subtitle="가장 많이 본 에티켓" />
+        <SectionHeader title="人気マナーtips" subtitle="最も見られたエチケット" />
         <div className="space-y-3">
           {mannerTips.map((tip) => (
             <Link
@@ -115,16 +115,16 @@ export default function MannerPage() {
       <section className="px-5 mb-8">
         <div className="p-5 bg-gray-50 rounded-3xl text-center">
           <h3 className="font-semibold text-[var(--text-main)] mb-2">
-            여행 계획에 매너 팁 추가하기
+            旅行計画にマナーtipsを追加
           </h3>
           <p className="text-sm text-[var(--text-sub)] mb-4">
-            방문 장소에 맞는 매너 팁을 자동으로 추가해보세요
+            訪問先に合ったマナーtipsを自動で追加してみましょう
           </p>
           <Link
             href="/plan"
             className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
           >
-            계획 만들기
+            計画を作成
             <ChevronRight className="w-4 h-4" />
           </Link>
         </div>

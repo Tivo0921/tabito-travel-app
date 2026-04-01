@@ -21,7 +21,7 @@ export function GuideProfileBadge({ guide, variant = 'default' }: GuideProfileBa
         </div>
         <div>
           <p className="text-sm font-medium text-[var(--text-main)]">{guide.name}</p>
-          <p className="text-xs text-[var(--text-sub)]">{guide.location} 가이드</p>
+          <p className="text-xs text-[var(--text-sub)]">{guide.location}ガイド</p>
         </div>
       </div>
     );

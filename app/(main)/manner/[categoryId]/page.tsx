@@ -89,7 +89,7 @@ export default function MannerCategoryPage({ params }: { params: Promise<{ categ
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-[var(--muted)]">아직 매너 팁이 없습니다</p>
+            <p className="text-[var(--muted)]">아직 マナーtipsがありません</p>
           </div>
         )}
       </div>

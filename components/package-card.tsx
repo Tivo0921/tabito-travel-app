@@ -42,7 +42,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
                 <span className="text-xs text-[var(--muted)]">({pkg.review_count})</span>
               </div>
               <span className="text-sm font-bold text-[var(--primary)]">
-                {pkg.price.toLocaleString()}원
+                {pkg.price.toLocaleString()}円
               </span>
             </div>
           </div>
@@ -99,7 +99,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
               <span className="text-[var(--muted)]">({pkg.review_count})</span>
             </div>
             <span className="text-lg font-bold text-[var(--primary)]">
-              {pkg.price.toLocaleString()}원
+              {pkg.price.toLocaleString()}円
             </span>
           </div>
         </div>

@@ -22,10 +22,10 @@ import { currentUser, packages } from '@/lib/mock-data';
 type TabType = 'saved' | 'recent';
 
 const menuItems = [
-  { id: 'language', icon: Globe, label: '언어 설정', href: '/settings/language' },
-  { id: 'notifications', icon: Bell, label: '알림 설정', href: '/settings/notifications' },
-  { id: 'privacy', icon: Shield, label: '개인정보 설정', href: '/settings/privacy' },
-  { id: 'help', icon: HelpCircle, label: '도움말', href: '/help' },
+  { id: 'language', icon: Globe, label: '언어 設定', href: '/settings/language' },
+  { id: 'notifications', icon: Bell, label: '알림 設定', href: '/settings/notifications' },
+  { id: 'privacy', icon: Shield, label: '개인정보 設定', href: '/settings/privacy' },
+  { id: 'help', icon: HelpCircle, label: 'ヘルプ', href: '/help' },
 ];
 
 export default function ProfilePage() {
@@ -46,7 +46,7 @@ export default function ProfilePage() {
       <header className="px-5 pt-6 pb-4">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-[var(--text-main)]">
-            프로필
+            プロフィール
           </h1>
           <Link href="/settings" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <Settings className="w-5 h-5 text-[var(--text-sub)]" />
@@ -76,7 +76,7 @@ export default function ProfilePage() {
               href="/profile/edit"
               className="px-4 py-2 bg-white rounded-xl text-sm font-medium text-[var(--primary)] hover:bg-gray-50 transition-colors"
             >
-              수정
+              編集
             </Link>
           </div>
 
@@ -84,15 +84,15 @@ export default function ProfilePage() {
           <div className="grid grid-cols-3 gap-4 mt-5 pt-5 border-t border-white/50">
             <div className="text-center">
               <p className="text-2xl font-bold text-[var(--primary)]">3</p>
-              <p className="text-xs text-[var(--text-sub)]">완료한 가이드</p>
+              <p className="text-xs text-[var(--text-sub)]">完了したガイド</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-[var(--primary)]">12</p>
-              <p className="text-xs text-[var(--text-sub)]">방문한 장소</p>
+              <p className="text-xs text-[var(--text-sub)]">訪問した場所</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-bold text-[var(--primary)]">5</p>
-              <p className="text-xs text-[var(--text-sub)]">저장한 항목</p>
+              <p className="text-xs text-[var(--text-sub)]">保存した項目</p>
             </div>
           </div>
         </div>
@@ -111,7 +111,7 @@ export default function ProfilePage() {
             )}
           >
             <Heart className="w-4 h-4" />
-            저장됨
+            保存済み
           </button>
           <button
             onClick={() => setActiveTab('recent')}
@@ -123,7 +123,7 @@ export default function ProfilePage() {
             )}
           >
             <Clock className="w-4 h-4" />
-            최근 본
+            最近見た
           </button>
         </div>
       </div>
@@ -139,9 +139,9 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-12">
                 <Heart className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />
-                <p className="text-[var(--muted)]">저장한 항목이 없습니다</p>
+                <p className="text-[var(--muted)]">保存した項目이 없습니다</p>
                 <p className="text-sm text-[var(--text-sub)]">
-                  마음에 드는 가이드를 저장해보세요
+                  気に入ったガイドを保存してみてください
                 </p>
               </div>
             )}
@@ -156,7 +156,7 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-12">
                 <Clock className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />
-                <p className="text-[var(--muted)]">최근 본 항목이 없습니다</p>
+                <p className="text-[var(--muted)]">最近見た 항목이 없습니다</p>
               </div>
             )}
           </div>
@@ -165,7 +165,7 @@ export default function ProfilePage() {
 
       {/* Menu */}
       <section className="px-5 mb-8">
-        <SectionHeader title="설정" />
+        <SectionHeader title="設定" />
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {menuItems.map((item, index) => (
             <Link
@@ -191,7 +191,7 @@ export default function ProfilePage() {
           className="w-full flex items-center justify-center gap-2 py-4 bg-gray-50 rounded-2xl text-[var(--text-sub)] hover:bg-gray-100 transition-colors"
         >
           <LogOut className="w-5 h-5" />
-          로그아웃
+          ログアウト
         </button>
       </section>
 

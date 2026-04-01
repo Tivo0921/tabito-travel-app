@@ -6,10 +6,10 @@ import { Home, Compass, CalendarDays, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { href: '/home', label: '홈', icon: Home },
-  { href: '/explore', label: '탐색', icon: Compass },
-  { href: '/plan', label: '계획', icon: CalendarDays },
-  { href: '/profile', label: '프로필', icon: User },
+  { href: '/home', label: 'ホーム', icon: Home },
+  { href: '/explore', label: '探索', icon: Compass },
+  { href: '/plan', label: '計画', icon: CalendarDays },
+  { href: '/profile', label: 'プロフィール', icon: User },
 ];
 
 export function BottomNav() {

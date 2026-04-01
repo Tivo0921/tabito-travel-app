@@ -26,30 +26,30 @@ interface PlanItem {
 
 const mockPlan = {
   id: 'plan-1',
-  title: '도쿄 3일 여행',
-  location: '도쿄',
+  title: '東京3日間旅行',
+  location: '東京',
   startDate: '2024-04-15',
   endDate: '2024-04-17',
   days: [
     {
       day: 1,
-      date: '4월 15일 (월)',
+      date: '4月15日(月)',
       items: [
-        { id: '1', time: '09:00', title: '하네다 공항 도착', type: 'transport' as const },
-        { id: '2', time: '11:00', title: '시부야 스크램블 교차로', type: 'spot' as const, mannerTip: '교차로 중앙에서 멈춰서 사진 찍지 마세요' },
-        { id: '3', time: '12:30', title: '라멘 점심', type: 'meal' as const, mannerTip: '라멘은 소리 내어 먹어도 괜찮아요' },
-        { id: '4', time: '14:00', title: '하라주쿠 타케시타 거리', type: 'spot' as const },
-        { id: '5', time: '16:00', title: '메이지 신궁', type: 'spot' as const, mannerTip: '참도 가장자리로 걸으세요' },
+        { id: '1', time: '09:00', title: '羽田空港到着', type: 'transport' as const },
+        { id: '2', time: '11:00', title: '渋谷スクランブル交差点', type: 'spot' as const, mannerTip: '交差点の真ん中で立ち止まって写真を撮らないでください' },
+        { id: '3', time: '12:30', title: 'ラーメンランチ', type: 'meal' as const, mannerTip: 'ラーメンは音を立てて食べてもOK' },
+        { id: '4', time: '14:00', title: '原宿竹下通り', type: 'spot' as const },
+        { id: '5', time: '16:00', title: '明治神宮', type: 'spot' as const, mannerTip: '参道の端を歩いてください' },
       ],
     },
     {
       day: 2,
-      date: '4월 16일 (화)',
+      date: '4月16日(火)',
       items: [
-        { id: '6', time: '10:00', title: '아사쿠사 센소지', type: 'spot' as const, mannerTip: '2례 2박수 1례 순서 지키기' },
-        { id: '7', time: '12:00', title: '나카미세 거리', type: 'spot' as const },
-        { id: '8', time: '13:30', title: '스시 점심', type: 'meal' as const },
-        { id: '9', time: '15:00', title: '아키하바라', type: 'spot' as const },
+        { id: '6', time: '10:00', title: '浅草浅草寺', type: 'spot' as const, mannerTip: '二礼二拍手一礼の順序を守る' },
+        { id: '7', time: '12:00', title: '仲見世通り', type: 'spot' as const },
+        { id: '8', time: '13:30', title: '寿司ランチ', type: 'meal' as const },
+        { id: '9', time: '15:00', title: '秋葉原', type: 'spot' as const },
       ],
     },
   ],
@@ -83,7 +83,7 @@ export default function PlanPage() {
       <header className="px-5 pt-6 pb-4">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-bold text-[var(--text-main)]">
-            여행 계획
+            旅行計画
           </h1>
           <button 
             onClick={() => setShowNewPlan(true)}
@@ -93,7 +93,7 @@ export default function PlanPage() {
           </button>
         </div>
         <p className="text-[var(--text-sub)]">
-          AI와 함께 일정을 만들어보세요
+          AIと一緒にスケジュールを作りましょう
         </p>
       </header>
 
@@ -102,14 +102,14 @@ export default function PlanPage() {
         <div className="p-4 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-2xl">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-5 h-5 text-[var(--primary)]" />
-            <span className="font-semibold text-[var(--text-main)]">AI 루트 추천</span>
+            <span className="font-semibold text-[var(--text-main)]">AIルート推薦</span>
           </div>
           <div className="flex gap-2">
             <input
               type="text"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="예: 도쿄에서 라멘 맛집 중심 1일 코스"
+              placeholder="例：東京でラーメン名店中心の1日コース"
               className="flex-1 px-4 py-3 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
             <button
@@ -214,21 +214,21 @@ export default function PlanPage() {
 
       {/* Quick Actions */}
       <section className="px-5 mb-8">
-        <SectionHeader title="빠른 추가" />
+        <SectionHeader title="クイック追加" />
         <div className="grid grid-cols-2 gap-3">
           <button className="p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left">
             <div className="w-10 h-10 bg-[var(--primary-soft)] rounded-xl flex items-center justify-center mb-3">
               <MapPin className="w-5 h-5 text-[var(--primary)]" />
             </div>
-            <p className="font-medium text-[var(--text-main)]">장소 추가</p>
-            <p className="text-xs text-[var(--muted)]">방문하고 싶은 곳</p>
+            <p className="font-medium text-[var(--text-main)]">スポットを追加</p>
+            <p className="text-xs text-[var(--muted)]">訪れたい場所</p>
           </button>
           <button className="p-4 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow text-left">
             <div className="w-10 h-10 bg-[var(--accent)]/30 rounded-xl flex items-center justify-center mb-3">
               <Info className="w-5 h-5 text-[var(--accent)]" />
             </div>
-            <p className="font-medium text-[var(--text-main)]">매너 팁 추가</p>
-            <p className="text-xs text-[var(--muted)]">상황별 에티켓</p>
+            <p className="font-medium text-[var(--text-main)]">マナーtipsを追加</p>
+            <p className="text-xs text-[var(--muted)]">シーン別エチケット</p>
           </button>
         </div>
       </section>
@@ -239,33 +239,33 @@ export default function PlanPage() {
           <div className="w-full bg-white rounded-t-3xl p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
             <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
             <h2 className="text-xl font-bold text-[var(--text-main)] mb-4">
-              새 여행 계획
+              새 旅行計画
             </h2>
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-[var(--text-main)] mb-2">
-                  여행 이름
+                  旅行名
                 </label>
                 <input
                   type="text"
-                  placeholder="예: 오사카 맛집 투어"
+                  placeholder="例：大阪グルメツアー"
                   className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--text-main)] mb-2">
-                  목적지
+                  目的地
                 </label>
                 <input
                   type="text"
-                  placeholder="예: 오사카"
+                  placeholder="例：大阪"
                   className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-main)] mb-2">
-                    시작일
+                    開始日
                   </label>
                   <input
                     type="date"
@@ -274,7 +274,7 @@ export default function PlanPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-main)] mb-2">
-                    종료일
+                    終了日
                   </label>
                   <input
                     type="date"
@@ -288,10 +288,10 @@ export default function PlanPage() {
                 onClick={() => setShowNewPlan(false)}
                 className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
               >
-                취소
+                キャンセル
               </button>
               <CTAButton onClick={() => setShowNewPlan(false)} className="flex-1">
-                만들기
+                作成
               </CTAButton>
             </div>
           </div>

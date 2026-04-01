@@ -18,7 +18,7 @@ export default function MannerTipDetailPage({ params }: { params: Promise<{ tipI
   if (!tip) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">매너 팁을 찾을 수 없습니다</p>
+        <p className="text-[var(--muted)]">マナーtipsが見つかりません</p>
       </div>
     );
   }
