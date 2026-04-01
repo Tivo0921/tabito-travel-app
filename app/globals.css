@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* TABITO Brand Colors */
+  --primary: #B81417;
+  --primary-soft: #F1D2D1;
+  --accent: #A1CACC;
+  --text-main: #000000;
+  --text-sub: #616868;
+  --muted: #8EA4A6;
+  --border: #D9D9D9;
+  --background: #FBFDFD;
+  
+  /* shadcn compatibility tokens */
+  --foreground: #000000;
+  --card: #FFFFFF;
+  --card-foreground: #000000;
+  --popover: #FFFFFF;
+  --popover-foreground: #000000;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1D2D1;
+  --secondary-foreground: #B81417;
+  --muted-foreground: #616868;
+  --accent-foreground: #000000;
+  --destructive: #B81417;
+  --destructive-foreground: #FFFFFF;
+  --input: #D9D9D9;
+  --ring: #B81417;
+  --radius: 1rem;
+  
+  /* Chart colors */
+  --chart-1: #B81417;
+  --chart-2: #A1CACC;
+  --chart-3: #F1D2D1;
+  --chart-4: #8EA4A6;
+  --chart-5: #616868;
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  
+  /* Custom TABITO colors */
+  --color-primary-soft: var(--primary-soft);
+  --color-text-main: var(--text-main);
+  --color-text-sub: var(--text-sub);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom utilities for TABITO */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+}
