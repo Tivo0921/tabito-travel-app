@@ -1,6 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Star, MapPin, Clock } from 'lucide-react';
+import { Star, MapPin, Clock, Package as PackageIcon } from 'lucide-react';
 import type { Package } from '@/lib/types';
 
 interface PackageCardProps {
@@ -13,13 +13,19 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
     return (
       <Link href={`/package/${pkg.id}`} className="block group">
         <div className="flex gap-4 p-3 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow">
-          <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0">
-            <Image
-              src={pkg.image_url}
-              alt={pkg.title}
-              fill
-              className="object-cover group-hover:scale-105 transition-transform duration-300"
-            />
+          <div className="relative w-24 h-24 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+            {pkg.image_url ? (
+              <Image
+                src={pkg.image_url}
+                alt={pkg.title}
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <PackageIcon className="w-8 h-8 text-gray-300" />
+              </div>
+            )}
           </div>
           <div className="flex-1 min-w-0 py-1">
             <h3 className="font-semibold text-[var(--text-main)] text-sm line-clamp-2 mb-1">
@@ -54,13 +60,19 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
   return (
     <Link href={`/package/${pkg.id}`} className="block group">
       <div className="bg-white rounded-3xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
-        <div className="relative aspect-[4/3] overflow-hidden">
-          <Image
-            src={pkg.image_url}
-            alt={pkg.title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-500"
-          />
+        <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
+          {pkg.image_url ? (
+            <Image
+              src={pkg.image_url}
+              alt={pkg.title}
+              fill
+              className="object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <PackageIcon className="w-16 h-16 text-gray-300" />
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
           <div className="absolute bottom-4 left-4 right-4">
             <div className="flex items-center gap-2 mb-2">

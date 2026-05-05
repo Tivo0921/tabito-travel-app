@@ -24,7 +24,7 @@ export function JapanesePhraseCard({ phrase }: JapanesePhraseCardProps) {
         {phrase.reading}
       </p>
       <p className="text-sm text-[var(--text-sub)]">
-        {phrase.korean}
+        {phrase.meaning}
       </p>
     </div>
   );

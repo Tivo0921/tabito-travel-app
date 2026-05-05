@@ -7,7 +7,7 @@ export default function MainLayout({
 }) {
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      <div className="mx-auto max-w-lg pb-24">
+      <div className="mx-auto max-w-lg pb-28">
         {children}
       </div>
       <BottomNav />

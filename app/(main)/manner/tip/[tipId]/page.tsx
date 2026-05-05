@@ -1,24 +1,28 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Check } from 'lucide-react';
 import { MannerTipBox } from '@/components/manner-tip-box';
 import { CTAButton } from '@/components/cta-button';
-import { mannerTips } from '@/lib/mock-data';
+import { getMannerTipById } from '@/lib/supabase/queries';
+import type { MannerTip } from '@/lib/types';
 
 export default function MannerTipDetailPage({ params }: { params: Promise<{ tipId: string }> }) {
   const { tipId } = use(params);
   const router = useRouter();
+  const [tip, setTip] = useState<MannerTip | null>(null);
   const [isAdded, setIsAdded] = useState(false);
-  
-  const tip = mannerTips.find(t => t.id === tipId);
+
+  useEffect(() => {
+    getMannerTipById(tipId).then(setTip);
+  }, [tipId]);
 
   if (!tip) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">マナーtipsが見つかりません</p>
+        <p className="text-[var(--muted)]">読み込み中...</p>
       </div>
     );
   }
@@ -41,7 +45,7 @@ export default function MannerTipDetailPage({ params }: { params: Promise<{ tipI
             <ArrowLeft className="w-5 h-5 text-[var(--text-main)]" />
           </button>
           <h1 className="text-lg font-semibold text-[var(--text-main)]">
-            매너 팁
+            マナーtips
           </h1>
         </div>
       </header>
@@ -85,12 +89,12 @@ export default function MannerTipDetailPage({ params }: { params: Promise<{ tipI
             {isAdded ? (
               <>
                 <Check className="w-5 h-5" />
-                계획에 추가됨
+                計画に追加済み
               </>
             ) : (
               <>
                 <Plus className="w-5 h-5" />
-                계획에 추가하기
+                計画に追加する
               </>
             )}
           </CTAButton>

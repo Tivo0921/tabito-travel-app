@@ -15,6 +15,10 @@ const navItems = [
 export function BottomNav() {
   const pathname = usePathname();
 
+  // 詳細ページ（パス階層が2段以上）ではBottomNavを非表示
+  const isDetailPage = pathname.split('/').filter(Boolean).length > 1;
+  if (isDetailPage) return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[var(--border)]">
       <div className="mx-auto max-w-lg">

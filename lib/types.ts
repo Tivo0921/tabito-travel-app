@@ -12,6 +12,7 @@ export interface User {
 
 export interface Guide {
   id: string;
+  user_id?: string;
   name: string;
   bio: string;
   avatar_url: string;
@@ -19,6 +20,19 @@ export interface Guide {
   languages: string[];
   rating: number;
   review_count: number;
+}
+
+export interface CreatorSpotInput {
+  name: string;
+  description: string;
+  image_url: string;
+  video_url: string;
+  duration_minutes: number;
+  map_url: string;
+  shop_url: string;
+  local_tips: string[];
+  etiquette_tips: string[];
+  phrases: { japanese: string; reading: string; meaning: string }[];
 }
 
 export interface Package {
@@ -62,7 +76,7 @@ export interface Spot {
 export interface JapanesePhrase {
   japanese: string;
   reading: string;
-  korean: string;
+  meaning: string;
   context: string;
 }
 
@@ -106,10 +120,9 @@ export interface Plan {
   id: string;
   user_id: string;
   title: string;
-  location: string;
-  start_date: string;
-  end_date: string;
-  items: PlanItem[];
+  location: string | null;
+  start_date: string | null;
+  end_date: string | null;
   created_at: string;
 }
 
@@ -118,12 +131,21 @@ export interface PlanItem {
   plan_id: string;
   day: number;
   order: number;
-  type: 'spot' | 'activity' | 'meal' | 'transport';
+  item_type: 'spot' | 'meal' | 'transport' | 'manner';
   title: string;
-  time?: string;
-  duration_minutes?: number;
-  manner_tip_id?: string;
-  manner_tip?: MannerTip;
+  scheduled_time: string | null;
+  duration_minutes: number | null;
+  spot_id: string | null;
+  manner_tip_id: string | null;
+}
+
+export interface Purchase {
+  id: string;
+  package_id: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'completed' | 'refunded';
+  purchased_at: string;
 }
 
 export interface MagazineArticle {

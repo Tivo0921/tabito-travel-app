@@ -11,7 +11,7 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ 
-  placeholder = '검색어를 입력하세요', 
+  placeholder = '検索キーワードを入力',
   onSearch,
   className 
 }: SearchBarProps) {

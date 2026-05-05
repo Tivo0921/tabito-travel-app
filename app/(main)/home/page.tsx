@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Sparkles, BookOpen, Newspaper, Heart, ChevronRight } from 'lucide-react';
@@ -7,49 +8,46 @@ import { SearchBar } from '@/components/search-bar';
 import { CategoryChip } from '@/components/category-chip';
 import { SectionHeader } from '@/components/section-header';
 import { PackageCard } from '@/components/package-card';
-import { 
-  currentUser, 
-  packages, 
-  magazineArticles, 
-  communityRoutes 
-} from '@/lib/mock-data';
-import { useState } from 'react';
+import { getPackages, getMagazineArticles, getCommunityRoutes } from '@/lib/supabase/queries';
+import type { Package, MagazineArticle, CommunityRoute } from '@/lib/types';
 
 const categories = [
-  { id: 'ai', label: 'AI 추천', icon: Sparkles },
-  { id: 'manner', label: '매너 가이드', icon: BookOpen },
-  { id: 'magazine', label: '매거진', icon: Newspaper },
-  { id: 'saved', label: '저장됨', icon: Heart },
+  { id: 'ai', label: 'AIおすすめ', icon: Sparkles },
+  { id: 'manner', label: 'マナーガイド', icon: BookOpen },
+  { id: 'magazine', label: 'マガジン', icon: Newspaper },
+  { id: 'saved', label: '保存済み', icon: Heart },
 ];
 
 export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState('ai');
+  const [packages, setPackages] = useState<Package[]>([]);
+  const [magazineArticles, setMagazineArticles] = useState<MagazineArticle[]>([]);
+  const [communityRoutes, setCommunityRoutes] = useState<CommunityRoute[]>([]);
+
+  useEffect(() => {
+    getPackages().then(setPackages);
+    getMagazineArticles().then(setMagazineArticles);
+    getCommunityRoutes().then(setCommunityRoutes);
+  }, []);
 
   return (
     <div className="pt-[env(safe-area-inset-top)]">
       {/* Header */}
       <header className="px-5 pt-6 pb-4">
         <div className="flex items-center justify-between mb-1">
-          <p className="text-[var(--text-sub)]">안녕하세요, {currentUser.name}님!</p>
+          <p className="text-[var(--text-sub)]">こんにちは！</p>
           <Link href="/profile">
-            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-[var(--primary-soft)]">
-              <Image
-                src={currentUser.avatar_url || '/placeholder.png'}
-                alt={currentUser.name}
-                fill
-                className="object-cover"
-              />
-            </div>
+            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-[var(--primary-soft)] bg-gray-100" />
           </Link>
         </div>
         <h1 className="text-2xl font-bold text-[var(--text-main)]">
-          일본 여행을, 더 깊게
+          日本旅行を、もっと深く
         </h1>
       </header>
 
       {/* Search */}
       <div className="px-5 mb-6">
-        <SearchBar placeholder="도시, 가이드, 키워드 검색" />
+        <SearchBar placeholder="都市、ガイド、キーワードで検索" />
       </div>
 
       {/* Categories */}
@@ -67,11 +65,11 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Featured Package */}
+      {/* Featured Packages */}
       <section className="px-5 mb-8">
-        <SectionHeader 
-          title="추천 가이드" 
-          subtitle="현지 선배가 엄선한 코스"
+        <SectionHeader
+          title="おすすめガイド"
+          subtitle="現地の先輩が厳選したコース"
           href="/explore"
         />
         <div className="space-y-4">
@@ -83,15 +81,15 @@ export default function HomePage() {
 
       {/* Magazine Section */}
       <section className="px-5 mb-8">
-        <SectionHeader 
-          title="매거진" 
-          subtitle="일본 여행 인사이트"
+        <SectionHeader
+          title="マガジン"
+          subtitle="日本旅行のインサイト"
           href="/explore?tab=magazine"
         />
         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 -mx-5 px-5">
           {magazineArticles.map((article) => (
-            <Link 
-              key={article.id} 
+            <Link
+              key={article.id}
               href={`/magazine/${article.id}`}
               className="flex-shrink-0 w-64 group"
             >
@@ -112,7 +110,7 @@ export default function HomePage() {
                 {article.title}
               </h3>
               <p className="text-sm text-[var(--text-sub)]">
-                {article.read_time}분 읽기
+                {article.read_time}分で読める
               </p>
             </Link>
           ))}
@@ -121,14 +119,14 @@ export default function HomePage() {
 
       {/* Community Routes */}
       <section className="px-5 mb-8">
-        <SectionHeader 
-          title="커뮤니티 루트" 
-          subtitle="여행자들이 공유한 코스"
+        <SectionHeader
+          title="コミュニティルート"
+          subtitle="旅行者がシェアしたコース"
           href="/explore?tab=community"
         />
         <div className="space-y-3">
           {communityRoutes.map((route) => (
-            <Link 
+            <Link
               key={route.id}
               href={`/route/${route.id}`}
               className="flex gap-4 p-3 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow group"
@@ -149,17 +147,9 @@ export default function HomePage() {
                   {route.description}
                 </p>
                 <div className="flex items-center gap-2">
-                  <div className="relative w-5 h-5 rounded-full overflow-hidden">
-                    <Image
-                      src={route.author.avatar_url || '/placeholder.png'}
-                      alt={route.author.name}
-                      fill
-                      className="object-cover"
-                    />
-                  </div>
                   <span className="text-xs text-[var(--muted)]">{route.author.name}</span>
                   <span className="text-xs text-[var(--muted)]">•</span>
-                  <span className="text-xs text-[var(--primary)]">{route.likes} 좋아요</span>
+                  <span className="text-xs text-[var(--primary)]">{route.likes} いいね</span>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-[var(--muted)] self-center flex-shrink-0" />
@@ -174,12 +164,12 @@ export default function HomePage() {
           <div className="p-5 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-3xl">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-[var(--primary)] mb-1">빠른 매너 체크</p>
+                <p className="text-sm font-medium text-[var(--primary)] mb-1">クイックマナーチェック</p>
                 <h3 className="text-lg font-bold text-[var(--text-main)]">
-                  일본 여행 매너 가이드
+                  日本旅行マナーガイド
                 </h3>
                 <p className="text-sm text-[var(--text-sub)] mt-1">
-                  상황별 에티켓을 미리 알아보세요
+                  シーン別エチケットを事前にチェック
                 </p>
               </div>
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm">

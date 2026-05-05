@@ -1,10 +1,12 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChevronRight, Plane, Utensils, Train, Landmark, ShoppingBag, Hotel } from 'lucide-react';
 import { SectionHeader } from '@/components/section-header';
-import { mannerCategories, mannerTips } from '@/lib/mock-data';
+import { getMannerCategories, getMannerTips } from '@/lib/supabase/queries';
+import type { MannerCategory, MannerTip } from '@/lib/types';
 
 const iconMap: Record<string, React.ElementType> = {
   Plane,
@@ -16,27 +18,26 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 export default function MannerPage() {
+  const [mannerCategories, setMannerCategories] = useState<MannerCategory[]>([]);
+  const [mannerTips, setMannerTips] = useState<MannerTip[]>([]);
+
+  useEffect(() => {
+    getMannerCategories().then(setMannerCategories);
+    getMannerTips().then(setMannerTips);
+  }, []);
+
   return (
     <div className="pt-[env(safe-area-inset-top)]">
-      {/* Header */}
       <header className="px-5 pt-6 pb-4">
-        <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">
-          マナーガイド
-        </h1>
-        <p className="text-[var(--text-sub)]">
-          日本旅行で知っておきたいエチケット
-        </p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">マナーガイド</h1>
+        <p className="text-[var(--text-sub)]">日本旅行で知っておきたいエチケット</p>
       </header>
 
       {/* Quick Tips Banner */}
       <div className="px-5 mb-6">
         <div className="p-5 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-3xl">
-          <p className="text-sm font-medium text-[var(--primary)] mb-1">
-            今日のマナーtips
-          </p>
-          <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">
-            日本ではチップを渡しません
-          </h3>
+          <p className="text-sm font-medium text-[var(--primary)] mb-1">今日のマナーtips</p>
+          <h3 className="text-lg font-bold text-[var(--text-main)] mb-2">日本ではチップを渡しません</h3>
           <p className="text-sm text-[var(--text-sub)]">
             日本でチップを渡すことは、むしろ失礼になることがあります。良いサービスに感謝したい場合は、丁寧な挨拶で表現しましょう。
           </p>
@@ -45,7 +46,7 @@ export default function MannerPage() {
 
       {/* Categories */}
       <section className="px-5 mb-8">
-        <SectionHeader title="カテゴリ" subtitle="상황별 マナーガイド" />
+        <SectionHeader title="カテゴリ" subtitle="シーン別マナーガイド" />
         <div className="grid grid-cols-2 gap-3">
           {mannerCategories.map((category) => {
             const Icon = iconMap[category.icon] || Landmark;
@@ -67,9 +68,7 @@ export default function MannerPage() {
                     <Icon className="w-4 h-4 text-white" />
                     <h3 className="font-semibold text-white">{category.name}</h3>
                   </div>
-                  <p className="text-xs text-white/80 line-clamp-1">
-                    {category.description}
-                  </p>
+                  <p className="text-xs text-white/80 line-clamp-1">{category.description}</p>
                 </div>
               </Link>
             );
@@ -98,12 +97,8 @@ export default function MannerPage() {
                 )}
               </div>
               <div className="flex-1 min-w-0 py-1">
-                <h3 className="font-semibold text-[var(--text-main)] mb-1 line-clamp-1">
-                  {tip.title}
-                </h3>
-                <p className="text-sm text-[var(--text-sub)] line-clamp-2">
-                  {tip.description}
-                </p>
+                <h3 className="font-semibold text-[var(--text-main)] mb-1 line-clamp-1">{tip.title}</h3>
+                <p className="text-sm text-[var(--text-sub)] line-clamp-2">{tip.description}</p>
               </div>
               <ChevronRight className="w-5 h-5 text-[var(--muted)] self-center flex-shrink-0" />
             </Link>
@@ -114,9 +109,7 @@ export default function MannerPage() {
       {/* Add to Plan CTA */}
       <section className="px-5 mb-8">
         <div className="p-5 bg-gray-50 rounded-3xl text-center">
-          <h3 className="font-semibold text-[var(--text-main)] mb-2">
-            旅行計画にマナーtipsを追加
-          </h3>
+          <h3 className="font-semibold text-[var(--text-main)] mb-2">旅行計画にマナーtipsを追加</h3>
           <p className="text-sm text-[var(--text-sub)] mb-4">
             訪問先に合ったマナーtipsを自動で追加してみましょう
           </p>

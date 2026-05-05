@@ -1,23 +1,25 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use, useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, 
-  Play, 
-  MapPin, 
-  ExternalLink, 
+import {
+  ArrowLeft,
+  Play,
+  MapPin,
+  ExternalLink,
   ChevronDown,
   ChevronUp,
-  Check
+  Check,
+  PartyPopper,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getYouTubeEmbedUrl } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
 import { SpotProgressItem } from '@/components/spot-progress-item';
 import { JapanesePhraseCard } from '@/components/japanese-phrase-card';
 import { MannerTipBox } from '@/components/manner-tip-box';
-import { getPackageById, getSpotsByPackageId } from '@/lib/mock-data';
+import { getPackageById, getSpotsByPackageId } from '@/lib/supabase/queries';
+import type { Package, Spot } from '@/lib/types';
 
 export default function GuideExperiencePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -25,16 +27,39 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
   const [currentSpotIndex, setCurrentSpotIndex] = useState(0);
   const [showAllSpots, setShowAllSpots] = useState(false);
   const [completedSpots, setCompletedSpots] = useState<Set<string>>(new Set());
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [pkg, setPkg] = useState<Package | null>(null);
+  const [spots, setSpots] = useState<Spot[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const pkg = getPackageById(id);
-  const spots = getSpotsByPackageId(id);
+  useEffect(() => {
+    Promise.all([
+      getPackageById(id).then(setPkg),
+      getSpotsByPackageId(id).then(setSpots),
+    ]).finally(() => setLoading(false));
+  }, [id]);
+
   const currentSpot = spots[currentSpotIndex];
-  const progress = ((currentSpotIndex + 1) / spots.length) * 100;
+  const progress = spots.length > 0 ? ((currentSpotIndex + 1) / spots.length) * 100 : 0;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-[var(--muted)]">読み込み中...</p>
+      </div>
+    );
+  }
 
   if (!pkg || !currentSpot) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">가이드를 찾을 수 없습니다</p>
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <p className="text-[var(--muted)]">ガイドが見つかりません</p>
+        <button
+          onClick={() => router.push('/home')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
+        >
+          ホームへ
+        </button>
       </div>
     );
   }
@@ -43,6 +68,8 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
     setCompletedSpots(new Set([...completedSpots, currentSpot.id]));
     if (currentSpotIndex < spots.length - 1) {
       setCurrentSpotIndex(currentSpotIndex + 1);
+    } else {
+      setShowCompleteModal(true);
     }
   };
 
@@ -63,7 +90,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
       <header className="sticky top-0 z-50 bg-white border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 px-4 py-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push(`/package/${id}`)}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-[var(--text-main)]" />
@@ -71,7 +98,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
           <div className="flex-1 min-w-0">
             <p className="text-sm text-[var(--text-sub)] truncate">{pkg.title}</p>
             <p className="text-xs text-[var(--muted)]">
-              {currentSpotIndex + 1} / {spots.length} 장소
+              {currentSpotIndex + 1} / {spots.length} スポット
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -82,7 +109,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
         </div>
         {/* Progress Bar */}
         <div className="h-1 bg-gray-100">
-          <div 
+          <div
             className="h-full bg-[var(--primary)] transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
@@ -101,32 +128,42 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               {currentSpot.name}
             </h1>
             <p className="text-sm text-[var(--text-sub)]">
-              약 {currentSpot.duration_minutes}분 소요
+              約{currentSpot.duration_minutes}分かかります
             </p>
           </div>
         </div>
 
         {/* Video Section */}
-        <div className="relative aspect-video bg-gray-100 rounded-2xl overflow-hidden mb-6">
-          <Image
-            src={currentSpot.image_url}
-            alt={currentSpot.name}
-            fill
-            className="object-cover"
-          />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-            <button className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
-              <Play className="w-6 h-6 text-[var(--primary)] ml-1" />
-            </button>
-          </div>
-          <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/60 rounded text-xs text-white">
-            가이드 영상
-          </div>
+        <div className="rounded-2xl overflow-hidden mb-6 bg-black aspect-video">
+          {getYouTubeEmbedUrl(currentSpot.video_url) ? (
+            <iframe
+              src={getYouTubeEmbedUrl(currentSpot.video_url)!}
+              title={currentSpot.name}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full"
+            />
+          ) : (
+            <div className="relative w-full h-full">
+              {currentSpot.image_url && (
+                <Image
+                  src={currentSpot.image_url}
+                  alt={currentSpot.name}
+                  fill
+                  className="object-cover"
+                />
+              )}
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 gap-2">
+                <Play className="w-10 h-10 text-white/60" />
+                <p className="text-white/60 text-sm">動画は準備中です</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Description */}
         <div className="mb-6">
-          <h2 className="font-semibold text-[var(--text-main)] mb-2">현지 가이드 설명</h2>
+          <h2 className="font-semibold text-[var(--text-main)] mb-2">現地ガイドの説明</h2>
           <p className="text-[var(--text-sub)] leading-relaxed">
             {currentSpot.description}
           </p>
@@ -134,7 +171,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
 
         {/* Local Tips */}
         <div className="mb-6">
-          <h2 className="font-semibold text-[var(--text-main)] mb-3">로컬 팁</h2>
+          <h2 className="font-semibold text-[var(--text-main)] mb-3">ローカルtips</h2>
           <div className="space-y-2">
             {currentSpot.local_tips.map((tip, index) => (
               <div
@@ -152,7 +189,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
 
         {/* Japanese Phrases */}
         <div className="mb-6">
-          <h2 className="font-semibold text-[var(--text-main)] mb-3">유용한 일본어</h2>
+          <h2 className="font-semibold text-[var(--text-main)] mb-3">役立つ日本語</h2>
           <div className="space-y-3">
             {currentSpot.japanese_phrases.map((phrase, index) => (
               <JapanesePhraseCard key={index} phrase={phrase} />
@@ -162,9 +199,9 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
 
         {/* Etiquette Tips */}
         <div className="mb-6">
-          <MannerTipBox 
-            title="이 장소 매너" 
-            tips={currentSpot.etiquette_tips} 
+          <MannerTipBox
+            title="このスポットのマナー"
+            tips={currentSpot.etiquette_tips}
             variant="info"
           />
         </div>
@@ -178,7 +215,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
             className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-[var(--border)] rounded-2xl text-[var(--text-main)] font-medium hover:bg-gray-50 transition-colors"
           >
             <MapPin className="w-5 h-5 text-[var(--primary)]" />
-            지도 열기
+            マップを開く
           </a>
           {currentSpot.shop_url && (
             <a
@@ -188,7 +225,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-[var(--border)] rounded-2xl text-[var(--text-main)] font-medium hover:bg-gray-50 transition-colors"
             >
               <ExternalLink className="w-5 h-5 text-[var(--accent)]" />
-              상세 정보
+              詳細情報
             </a>
           )}
         </div>
@@ -199,7 +236,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
           className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-4"
         >
           <span className="font-medium text-[var(--text-main)]">
-            전체 장소 보기 ({spots.length}곳)
+            全スポットを見る ({spots.length}か所)
           </span>
           {showAllSpots ? (
             <ChevronUp className="w-5 h-5 text-[var(--muted)]" />
@@ -216,10 +253,10 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
                 key={spot.id}
                 spot={spot}
                 status={
-                  completedSpots.has(spot.id) 
-                    ? 'completed' 
-                    : index === currentSpotIndex 
-                      ? 'current' 
+                  completedSpots.has(spot.id)
+                    ? 'completed'
+                    : index === currentSpotIndex
+                      ? 'current'
                       : 'upcoming'
                 }
                 onClick={() => handleSpotClick(index)}
@@ -229,8 +266,40 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
         )}
       </div>
 
+      {/* Complete Modal */}
+      {showCompleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end">
+          <div className="w-full bg-white rounded-t-3xl p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6" />
+            <div className="flex flex-col items-center gap-3 mb-6">
+              <div className="w-16 h-16 rounded-full bg-[var(--primary-soft)] flex items-center justify-center">
+                <PartyPopper className="w-8 h-8 text-[var(--primary)]" />
+              </div>
+              <h2 className="text-xl font-bold text-[var(--text-main)]">ガイド完了！</h2>
+              <p className="text-sm text-[var(--text-sub)] text-center">
+                {pkg?.title}のすべてのスポットを巡りました。
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCompleteModal(false)}
+                className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
+              >
+                もう一度見る
+              </button>
+              <button
+                onClick={() => router.push(`/package/${id}`)}
+                className="flex-1 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
+              >
+                パッケージへ戻る
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="max-w-lg mx-auto flex items-center gap-3">
           <button
             onClick={handlePrevSpot}
@@ -242,7 +311,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
                 : 'hover:bg-gray-50'
             )}
           >
-            이전
+            前へ
           </button>
           <CTAButton
             onClick={handleNextSpot}
@@ -252,10 +321,10 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
             {currentSpotIndex === spots.length - 1 ? (
               <>
                 <Check className="w-5 h-5" />
-                완료
+                完了
               </>
             ) : (
-              '다음 장소'
+              '次のスポット'
             )}
           </CTAButton>
         </div>

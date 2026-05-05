@@ -8,33 +8,33 @@ import { CTAButton } from '@/components/cta-button';
 
 const onboardingSlides = [
   {
-    title: '일본을 더 깊게',
+    title: '日本をもっと深く',
     subtitle: 'Travel Japan, Deeper',
-    description: '표면적인 관광을 넘어, 진짜 일본을 만나보세요. 현지에 사는 한국인 선배들이 알려주는 숨은 이야기.',
+    description: '表面的な観光を超え、本物の日本に出会いましょう。現地に住む先輩たちが教える隠れたストーリー。',
     gradient: 'from-[var(--primary-soft)] to-white',
   },
   {
-    title: '출발 전, 일본을 이해하세요',
+    title: '出発前に、日本を理解しよう',
     subtitle: 'Before You Arrive',
-    description: '여행 전 튜토리얼 영상으로 일본의 문화와 매너를 미리 익히고 떠나세요.',
+    description: '旅行前のチュートリアル動画で、日本の文化とマナーを事前に学んで出発しましょう。',
     gradient: 'from-[var(--accent)]/30 to-white',
   },
   {
-    title: '상황 속에서 매너를 배워요',
+    title: '場面の中でマナーを学ぼう',
     subtitle: 'Learn in Context',
-    description: '각 장소에서 필요한 매너와 일본어 표현을 적재적소에 알려드립니다.',
+    description: '各スポットで必要なマナーと日本語表現をその場でお伝えします。',
     gradient: 'from-[var(--primary-soft)] to-white',
   },
   {
-    title: '관광지를 넘어서',
+    title: '観光地を超えて',
     subtitle: 'Beyond Tourism',
-    description: '현지인만 아는 숨은 명소, 로컬 맛집, 진짜 일본의 일상을 경험하세요.',
+    description: '地元の人だけが知る隠れスポット、ローカルグルメ、本物の日本の日常を体験しよう。',
     gradient: 'from-[var(--accent)]/30 to-white',
   },
   {
-    title: '여행을 시작하세요',
+    title: '旅を始めよう',
     subtitle: 'Start Your Journey',
-    description: 'TABITO와 함께 특별한 일본 여행을 시작해보세요.',
+    description: 'TABITOと一緒に特別な日本旅行を始めましょう。',
     gradient: 'from-[var(--primary-soft)] to-[var(--accent)]/20',
     isLast: true,
   },
@@ -58,12 +58,11 @@ export default function OnboardingPage() {
   };
 
   const handleGetStarted = () => {
-    router.push('/home');
+    router.push('/login');
   };
 
   const handleLogin = () => {
-    // TODO: Implement login with Supabase Auth
-    router.push('/home');
+    router.push('/login');
   };
 
   return (
@@ -91,7 +90,7 @@ export default function OnboardingPage() {
             onClick={() => router.push('/home')}
             className="text-sm text-[var(--text-sub)] hover:text-[var(--text-main)] transition-colors"
           >
-            건너뛰기
+            スキップ
           </button>
         )}
         {slide.isLast && <div className="w-16" />}
@@ -149,18 +148,18 @@ export default function OnboardingPage() {
         {slide.isLast ? (
           <div className="space-y-3">
             <CTAButton onClick={handleGetStarted} fullWidth size="lg">
-              시작하기
+              はじめる
             </CTAButton>
             <button
               onClick={handleLogin}
               className="w-full text-center text-sm text-[var(--text-sub)] hover:text-[var(--primary)] transition-colors py-2"
             >
-              이미 계정이 있으신가요? <span className="font-semibold">로그인</span>
+              すでにアカウントをお持ちですか？ <span className="font-semibold">ログイン</span>
             </button>
           </div>
         ) : (
           <CTAButton onClick={nextSlide} fullWidth size="lg">
-            다음
+            次へ
             <ChevronRight className="w-5 h-5" />
           </CTAButton>
         )}

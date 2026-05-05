@@ -1,23 +1,36 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
-import { mannerCategories, getMannerTipsByCategoryId } from '@/lib/mock-data';
+import { getMannerCategoryById, getMannerTipsByCategoryId } from '@/lib/supabase/queries';
+import type { MannerCategory, MannerTip } from '@/lib/types';
 
 export default function MannerCategoryPage({ params }: { params: Promise<{ categoryId: string }> }) {
   const { categoryId } = use(params);
   const router = useRouter();
-  
-  const category = mannerCategories.find(c => c.id === categoryId);
-  const tips = getMannerTipsByCategoryId(categoryId);
+  const [category, setCategory] = useState<MannerCategory | null>(null);
+  const [tips, setTips] = useState<MannerTip[]>([]);
+
+  useEffect(() => {
+    getMannerCategoryById(categoryId).then(setCategory);
+    getMannerTipsByCategoryId(categoryId).then(setTips);
+  }, [categoryId]);
+
+  if (category === null && tips.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-[var(--muted)]">読み込み中...</p>
+      </div>
+    );
+  }
 
   if (!category) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">카테고리를 찾을 수 없습니다</p>
+        <p className="text-[var(--muted)]">カテゴリが見つかりません</p>
       </div>
     );
   }
@@ -33,7 +46,7 @@ export default function MannerCategoryPage({ params }: { params: Promise<{ categ
           className="object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-        
+
         <header className="absolute top-0 left-0 right-0 pt-[env(safe-area-inset-top)] px-4 py-4">
           <button
             onClick={() => router.back()}
@@ -89,7 +102,7 @@ export default function MannerCategoryPage({ params }: { params: Promise<{ categ
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-[var(--muted)]">아직 マナーtipsがありません</p>
+            <p className="text-[var(--muted)]">まだマナーtipsがありません</p>
           </div>
         )}
       </div>

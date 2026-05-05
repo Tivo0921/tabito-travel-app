@@ -28,7 +28,7 @@ export function MannerTipBox({ title, tips, variant = 'info' }: MannerTipBoxProp
       border: 'border-red-200',
       icon: X,
       iconColor: 'text-red-500',
-      title: title || '이건 피하세요',
+      title: title || 'これは避けましょう',
     },
   };
 

@@ -1,17 +1,17 @@
 import type { Metadata, Viewport } from 'next'
-import { Noto_Sans_KR } from 'next/font/google'
+import { Noto_Sans_JP } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const notoSansKR = Noto_Sans_KR({ 
+const notoSansJP = Noto_Sans_JP({
   subsets: ["latin"],
   weight: ['400', '500', '600', '700'],
   variable: '--font-sans',
 });
 
 export const metadata: Metadata = {
-  title: 'TABITO - 일본 여행을 더 깊게',
-  description: '현지 한국인 선배가 안내하는 진짜 일본 여행 가이드',
+  title: 'TABITO - 日本旅行をもっと深く',
+  description: '現地ガイドが案内する本物の日本旅行ガイド',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -46,8 +46,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="ko">
-      <body className={`${notoSansKR.variable} font-sans antialiased`}>
+    <html lang="ja">
+      <body className={`${notoSansJP.variable} font-sans antialiased`}>
         {children}
         <Analytics />
       </body>
