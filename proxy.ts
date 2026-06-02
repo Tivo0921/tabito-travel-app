@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (process.env.MAINTENANCE_MODE === 'true' && process.env.VERCEL_ENV === 'production' && pathname !== '/maintenance') {
