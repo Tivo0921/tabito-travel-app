@@ -40,6 +40,8 @@ export const viewport: Viewport = {
   themeColor: '#B81417',
 }
 
+const isTestMode = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_');
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -48,6 +50,11 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={`${notoSansJP.variable} font-sans antialiased`}>
+        {isTestMode && (
+          <div className="w-full bg-yellow-400 text-yellow-900 text-center text-xs font-semibold py-1.5 sticky top-0 z-[9999]">
+            テストモード — 実際の決済は行われません
+          </div>
+        )}
         {children}
         <Analytics />
       </body>
