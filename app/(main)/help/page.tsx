@@ -175,14 +175,14 @@ export default function HelpPage() {
           <p className="text-sm text-[var(--text-sub)] mb-4">サポートチームに直接お問い合わせください</p>
           <div className="flex gap-3">
             <a
-              href="mailto:support@tabito.app"
+              href="mailto:support@tabito.site"
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-white rounded-2xl text-sm font-medium text-[var(--text-main)] hover:bg-gray-50 transition-colors"
             >
               <Mail className="w-4 h-4 text-[var(--primary)]" />
               メール
             </a>
             <a
-              href="https://tabito.app/chat"
+              href="https://tabito.site/chat"
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-[var(--primary)] rounded-2xl text-sm font-medium text-white hover:bg-[var(--primary)]/90 transition-colors"
             >
               <MessageCircle className="w-4 h-4" />
