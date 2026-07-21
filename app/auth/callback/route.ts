@@ -25,7 +25,13 @@ export async function GET(request: Request) {
       }
       return NextResponse.redirect(`${origin}${next}`);
     }
+    // code→セッション交換に失敗: 真因を特定するため実エラーを記録・伝播
+    console.error('exchangeCodeForSession failed:', error.status, error.code, error.message);
+    return NextResponse.redirect(
+      `${origin}/login?error=auth_failed&code=${encodeURIComponent(error.code ?? 'unknown')}`
+    );
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+  console.error('OAuth callback: no code param', request.url);
+  return NextResponse.redirect(`${origin}/login?error=auth_failed&code=no_code`);
 }
