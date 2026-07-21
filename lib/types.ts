@@ -35,6 +35,18 @@ export interface CreatorSpotInput {
   phrases: { japanese: string; reading: string; meaning: string }[];
 }
 
+export interface Area {
+  id: string;
+  name: string;
+  sort_order: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  sort_order: number;
+}
+
 export interface Package {
   id: string;
   title: string;
@@ -43,14 +55,16 @@ export interface Package {
   image_url: string;
   guide_id: string;
   guide?: Guide;
-  area: string;
+  area: string;          // 表示用の名前（areas.name を JOIN で解決）
+  area_id?: string;      // 編集フォーム用の FK
   duration: string;
   price: number;
   currency: string;
   rating: number;
   review_count: number;
   spot_count: number;
-  category: string;
+  category: string;      // 表示用の名前（categories.name を JOIN で解決）
+  category_id?: string | null; // 編集フォーム用の FK
   tags: string[];
   features: string[];
   tutorial_video_url?: string;

@@ -13,9 +13,50 @@ import type {
   PlanItem,
   Purchase,
   CreatorSpotInput,
+  Area,
+  Category,
 } from '@/lib/types';
 
 const DEFAULT_LANG = 'ja';
+
+// ────────────────────────────────────────────────
+// Taxonomy (エリア / カテゴリ マスタ)
+// ────────────────────────────────────────────────
+
+export async function getAreas(): Promise<Area[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('areas')
+    .select('id, name, sort_order')
+    .order('sort_order', { ascending: true });
+
+  if (error || !data) {
+    console.error('getAreas error:', error);
+    return [];
+  }
+  return data as Area[];
+}
+
+export async function getCategories(): Promise<Category[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id, name, sort_order')
+    .order('sort_order', { ascending: true });
+
+  if (error || !data) {
+    console.error('getCategories error:', error);
+    return [];
+  }
+  return data as Category[];
+}
+
+// packages 埋め込みリレーションから area/category の名前を取り出すヘルパー
+function relName(rel: unknown): string {
+  if (!rel) return '';
+  const obj = Array.isArray(rel) ? rel[0] : rel;
+  return (obj as { name?: string } | undefined)?.name ?? '';
+}
 
 function minutesToDuration(minutes: number | null): string {
   if (!minutes) return '';
@@ -35,6 +76,8 @@ export async function getPackages(lang = DEFAULT_LANG): Promise<Package[]> {
     .from('packages')
     .select(`
       *,
+      areas(name),
+      categories(name),
       package_translations!inner(title, description, short_description),
       guides(
         id, location, languages, rating, review_count, avatar_url,
@@ -76,14 +119,16 @@ export async function getPackages(lang = DEFAULT_LANG): Promise<Package[]> {
         rating: Number(guide.rating),
         review_count: guide.review_count,
       } as Guide : undefined,
-      area: row.area,
+      area: relName(row.areas),
+      area_id: row.area_id,
       duration: minutesToDuration(row.duration_minutes),
       price: row.price,
       currency: row.currency,
       rating: Number(row.rating),
       review_count: row.review_count,
       spot_count: row.spot_count,
-      category: row.category ?? '',
+      category: relName(row.categories),
+      category_id: row.category_id,
       tags: row.tags,
       features: row.features,
       tutorial_video_url: row.tutorial_video_url ?? undefined,
@@ -99,6 +144,8 @@ export async function getPackageById(id: string, lang = DEFAULT_LANG): Promise<P
     .from('packages')
     .select(`
       *,
+      areas(name),
+      categories(name),
       package_translations!inner(title, description, short_description),
       guides(
         id, location, languages, rating, review_count, avatar_url,
@@ -139,14 +186,16 @@ export async function getPackageById(id: string, lang = DEFAULT_LANG): Promise<P
       rating: Number(guide.rating),
       review_count: guide.review_count,
     } as Guide : undefined,
-    area: data.area,
+    area: relName(data.areas),
+    area_id: data.area_id,
     duration: minutesToDuration(data.duration_minutes),
     price: data.price,
     currency: data.currency,
     rating: Number(data.rating),
     review_count: data.review_count,
     spot_count: data.spot_count,
-    category: data.category ?? '',
+    category: relName(data.categories),
+    category_id: data.category_id,
     tags: data.tags,
     features: data.features,
     tutorial_video_url: data.tutorial_video_url ?? undefined,
@@ -754,6 +803,8 @@ export async function getSavedPackages(lang = DEFAULT_LANG): Promise<Package[]> 
     .from('packages')
     .select(`
       *,
+      areas(name),
+      categories(name),
       package_translations!inner(title, description, short_description),
       guides(
         id, location, languages, rating, review_count, avatar_url,
@@ -789,14 +840,16 @@ export async function getSavedPackages(lang = DEFAULT_LANG): Promise<Package[]> 
         rating: Number(guide.rating),
         review_count: guide.review_count,
       } as Guide : undefined,
-      area: row.area,
+      area: relName(row.areas),
+      area_id: row.area_id,
       duration: minutesToDuration(row.duration_minutes),
       price: row.price,
       currency: row.currency,
       rating: Number(row.rating),
       review_count: row.review_count,
       spot_count: row.spot_count,
-      category: row.category ?? '',
+      category: relName(row.categories),
+      category_id: row.category_id,
       tags: row.tags,
       features: row.features,
       tutorial_video_url: row.tutorial_video_url ?? undefined,
@@ -966,6 +1019,8 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
     .from('packages')
     .select(`
       *,
+      areas(name),
+      categories(name),
       package_translations(title, description, short_description),
       guides!inner(id, user_id)
     `)
@@ -987,14 +1042,16 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
       short_description: t?.short_description ?? '',
       image_url: row.image_url ?? '',
       guide_id: row.guide_id,
-      area: row.area,
+      area: relName(row.areas),
+      area_id: row.area_id,
       duration: minutesToDuration(row.duration_minutes),
       price: row.price,
       currency: row.currency,
       rating: Number(row.rating),
       review_count: row.review_count,
       spot_count: row.spot_count,
-      category: row.category ?? '',
+      category: relName(row.categories),
+      category_id: row.category_id,
       tags: row.tags ?? [],
       features: row.features ?? [],
       tutorial_video_url: row.tutorial_video_url ?? undefined,
@@ -1007,11 +1064,11 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
 export async function createCreatorPackage(
   guideId: string,
   title: string,
-  area: string,
+  areaId: string,
   price: number,
   shortDescription: string,
   description: string,
-  category: string,
+  categoryId: string,
   imageUrl: string,
   durationMinutes: number | null,
 ): Promise<string | null> {
@@ -1021,10 +1078,10 @@ export async function createCreatorPackage(
     .from('packages')
     .insert({
       guide_id: guideId,
-      area,
+      area_id: areaId,
       price,
       currency: 'JPY',
-      category: category || null,
+      category_id: categoryId || null,
       image_url: imageUrl || null,
       duration_minutes: durationMinutes,
       status: 'draft',
@@ -1053,20 +1110,20 @@ export async function createCreatorPackage(
 export async function updateCreatorPackage(
   packageId: string,
   title: string,
-  area: string,
+  areaId: string,
   price: number,
   shortDescription: string,
   description: string,
-  category: string,
+  categoryId: string,
   imageUrl: string,
   durationMinutes: number | null,
 ): Promise<void> {
   const supabase = createClient();
 
   await supabase.from('packages').update({
-    area,
+    area_id: areaId,
     price,
-    category: category || null,
+    category_id: categoryId || null,
     image_url: imageUrl || null,
     duration_minutes: durationMinutes,
   }).eq('id', packageId);
@@ -1101,7 +1158,7 @@ export async function getCreatorPackageWithSpots(
   const [pkgResult, spotsResult] = await Promise.all([
     supabase
       .from('packages')
-      .select(`*, package_translations(title, description, short_description)`)
+      .select(`*, areas(name), categories(name), package_translations(title, description, short_description)`)
       .eq('id', packageId)
       .single(),
     supabase
@@ -1129,14 +1186,16 @@ export async function getCreatorPackageWithSpots(
     short_description: t?.short_description ?? '',
     image_url: row.image_url ?? '',
     guide_id: row.guide_id,
-    area: row.area,
+    area: relName(row.areas),
+    area_id: row.area_id,
     duration: minutesToDuration(row.duration_minutes),
     price: row.price,
     currency: row.currency,
     rating: Number(row.rating),
     review_count: row.review_count,
     spot_count: row.spot_count,
-    category: row.category ?? '',
+    category: relName(row.categories),
+    category_id: row.category_id,
     tags: row.tags ?? [],
     features: row.features ?? [],
     tutorial_video_url: row.tutorial_video_url ?? undefined,

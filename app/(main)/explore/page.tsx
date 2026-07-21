@@ -8,26 +8,13 @@ import { Filter, MapPin, Clock, BookOpen, Heart, User, ChevronRight } from 'luci
 import { SearchBar } from '@/components/search-bar';
 import { CategoryChip } from '@/components/category-chip';
 import { PackageCard } from '@/components/package-card';
-import { getPackages, getMagazineArticles, getCommunityRoutes } from '@/lib/supabase/queries';
+import { getPackages, getMagazineArticles, getCommunityRoutes, getAreas, getCategories } from '@/lib/supabase/queries';
 import type { Package, MagazineArticle, CommunityRoute } from '@/lib/types';
 
 type TabType = 'packages' | 'magazine' | 'community';
+type Filter = { id: string; label: string };
 
-const areas = [
-  { id: 'all', label: 'すべて' },
-  { id: '東京', label: '東京' },
-  { id: '大阪', label: '大阪' },
-  { id: '京都', label: '京都' },
-  { id: '福岡', label: '福岡' },
-];
-
-const categoryFilters = [
-  { id: 'all', label: 'すべて' },
-  { id: '都市探検', label: '都市探検' },
-  { id: 'グルメ', label: 'グルメ' },
-  { id: '文化', label: '文化' },
-  { id: 'ショッピング', label: 'ショッピング' },
-];
+const ALL_FILTER: Filter = { id: 'all', label: 'すべて' };
 
 function ExploreInner() {
   const searchParams = useSearchParams();
@@ -41,6 +28,8 @@ function ExploreInner() {
   const [allPackages, setAllPackages] = useState<Package[]>([]);
   const [magazineArticles, setMagazineArticles] = useState<MagazineArticle[]>([]);
   const [communityRoutes, setCommunityRoutes] = useState<CommunityRoute[]>([]);
+  const [areas, setAreas] = useState<Filter[]>([ALL_FILTER]);
+  const [categoryFilters, setCategoryFilters] = useState<Filter[]>([ALL_FILTER]);
   const [activeArea, setActiveArea] = useState('all');
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +38,12 @@ function ExploreInner() {
     getPackages().then(setAllPackages);
     getMagazineArticles().then(setMagazineArticles);
     getCommunityRoutes().then(setCommunityRoutes);
+    getAreas().then((data) =>
+      setAreas([ALL_FILTER, ...data.map((a) => ({ id: a.name, label: a.name }))]),
+    );
+    getCategories().then((data) =>
+      setCategoryFilters([ALL_FILTER, ...data.map((c) => ({ id: c.name, label: c.name }))]),
+    );
   }, []);
 
   const filteredPackages = allPackages.filter((pkg) => {

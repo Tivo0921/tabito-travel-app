@@ -27,11 +27,10 @@ import {
   updateCreatorSpot,
   deleteCreatorSpot,
   setPackageStatus,
+  getAreas,
+  getCategories,
 } from '@/lib/supabase/queries';
-import type { Spot, CreatorSpotInput } from '@/lib/types';
-
-const AREAS = ['東京', '大阪', '京都', '横浜', '名古屋', '福岡', '札幌', 'その他'];
-const CATEGORIES = ['都市探検', 'グルメ', '文化・歴史', 'ショッピング', '自然', 'エンタメ'];
+import type { Spot, CreatorSpotInput, Area, Category } from '@/lib/types';
 
 const EMPTY_SPOT: CreatorSpotInput = {
   name: '',
@@ -62,9 +61,11 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [title, setTitle] = useState('');
   const [shortDesc, setShortDesc] = useState('');
   const [description, setDescription] = useState('');
-  const [area, setArea] = useState(AREAS[0]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [areaId, setAreaId] = useState('');
   const [price, setPrice] = useState('');
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [categoryId, setCategoryId] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [durationHours, setDurationHours] = useState('');
   const [infoSaved, setInfoSaved] = useState(false);
@@ -89,9 +90,9 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       setTitle(p.title);
       setShortDesc(p.short_description);
       setDescription(p.description);
-      setArea(p.area);
+      setAreaId(p.area_id ?? '');
       setPrice(String(p.price));
-      setCategory(p.category);
+      setCategoryId(p.category_id ?? '');
       setImageUrl(p.image_url);
       setDurationHours(p.duration ? String(Math.round(parseInt(p.duration) / 60) || '') : '');
       setStatus(p.status as 'draft' | 'published');
@@ -106,15 +107,27 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     }
   }, [isNew, packageId, loadPackage]);
 
+  // エリア/カテゴリのマスタを取得。未選択なら先頭を既定にする
+  useEffect(() => {
+    getAreas().then((data) => {
+      setAreas(data);
+      setAreaId((prev) => prev || data[0]?.id || '');
+    });
+    getCategories().then((data) => {
+      setCategories(data);
+      setCategoryId((prev) => prev || data[0]?.id || '');
+    });
+  }, []);
+
   const handleSaveInfo = async () => {
-    if (!title.trim() || !area || !price) return;
+    if (!title.trim() || !areaId || !price) return;
     setSavingInfo(true);
     const durationMin = durationHours ? Math.round(parseFloat(durationHours) * 60) : null;
     const priceNum = parseInt(price) || 0;
 
     if (!packageId) {
       const newId = await createCreatorPackage(
-        guideId, title, area, priceNum, shortDesc, description, category, imageUrl, durationMin,
+        guideId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin,
       );
       if (newId) {
         setPackageId(newId);
@@ -122,7 +135,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
         router.replace(`/creator/package/${newId}`);
       }
     } else {
-      await updateCreatorPackage(packageId, title, area, priceNum, shortDesc, description, category, imageUrl, durationMin);
+      await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
       setInfoSaved(true);
     }
     setSavingInfo(false);
@@ -283,21 +296,21 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               <div>
                 <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">エリア *</label>
                 <select
-                  value={area}
-                  onChange={(e) => { setArea(e.target.value); setInfoSaved(false); }}
+                  value={areaId}
+                  onChange={(e) => { setAreaId(e.target.value); setInfoSaved(false); }}
                   className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                 >
-                  {AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+                  {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">カテゴリ</label>
                 <select
-                  value={category}
-                  onChange={(e) => { setCategory(e.target.value); setInfoSaved(false); }}
+                  value={categoryId}
+                  onChange={(e) => { setCategoryId(e.target.value); setInfoSaved(false); }}
                   className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                 >
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
             </div>
@@ -344,7 +357,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             <CTAButton
               onClick={handleSaveInfo}
               fullWidth
-              disabled={!title.trim() || !area || !price || savingInfo}
+              disabled={!title.trim() || !areaId || !price || savingInfo}
               loading={savingInfo}
             >
               {infoSaved ? '保存済み ✓' : '基本情報を保存'}
