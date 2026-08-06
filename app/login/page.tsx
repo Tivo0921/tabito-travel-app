@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { Logo } from '@/components/logo';
 
 function LoginInner() {
   const router = useRouter();
@@ -34,18 +35,11 @@ function LoginInner() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[var(--primary-soft)] to-white flex flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-center pt-[env(safe-area-inset-top)] p-6 pt-16">
-        <div className="text-3xl font-bold text-[var(--primary)]">TABITO</div>
-      </header>
-
+    <div className="min-h-screen bg-gradient-to-b from-[var(--primary-soft)] to-white flex flex-col pt-[env(safe-area-inset-top)]">
       {/* Content */}
-      <main className="flex-1 flex flex-col items-center justify-center px-8 pb-8">
+      <main className="flex-1 flex flex-col items-center justify-center px-8 py-16">
         {/* Logo area */}
-        <div className="w-24 h-24 mb-8 rounded-3xl bg-white shadow-lg flex items-center justify-center">
-          <span className="text-4xl">🗾</span>
-        </div>
+        <Logo size="xl" className="mb-8" priority />
 
         <div className="text-center mb-10">
           <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">

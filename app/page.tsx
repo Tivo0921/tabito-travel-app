@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
+import { Logo, LogoMark } from '@/components/logo';
 
 const onboardingSlides = [
   {
@@ -82,9 +83,7 @@ export default function OnboardingPage() {
         ) : (
           <div className="w-10" />
         )}
-        <div className="text-2xl font-bold text-[var(--primary)]">
-          TABITO
-        </div>
+        <Logo size="sm" priority />
         {!slide.isLast && (
           <button
             onClick={() => router.push('/home')}
@@ -99,18 +98,18 @@ export default function OnboardingPage() {
       {/* Content */}
       <main className="flex-1 flex flex-col items-center justify-center px-8 pb-8">
         {/* Illustration Placeholder */}
-        <div className="w-64 h-64 mb-8 rounded-3xl bg-white/60 backdrop-blur-sm shadow-lg flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-6xl mb-2 text-[var(--primary)]">
-              {currentSlide === 0 && '🇯🇵'}
+        {currentSlide === 0 ? (
+          <LogoMark size="2xl" className="mb-8 drop-shadow-xl" priority />
+        ) : (
+          <div className="w-64 h-64 mb-8 rounded-3xl bg-white/60 backdrop-blur-sm shadow-lg flex items-center justify-center">
+            <div className="text-6xl text-[var(--primary)]">
               {currentSlide === 1 && '📚'}
               {currentSlide === 2 && '🎌'}
               {currentSlide === 3 && '🗾'}
               {currentSlide === 4 && '✨'}
             </div>
-            <p className="text-sm text-[var(--muted)]">Illustration</p>
           </div>
-        </div>
+        )}
 
         {/* Text Content */}
         <div className="text-center max-w-sm">

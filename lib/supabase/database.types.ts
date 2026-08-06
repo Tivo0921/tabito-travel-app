@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -39,6 +34,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      areas: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       community_route_translations: {
         Row: {
           description: string | null
@@ -464,8 +501,8 @@ export type Database = {
       }
       packages: {
         Row: {
-          area: string
-          category: string | null
+          area_id: string
+          category_id: string | null
           created_at: string
           currency: string
           duration_minutes: number | null
@@ -483,8 +520,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          area: string
-          category?: string | null
+          area_id: string
+          category_id?: string | null
           created_at?: string
           currency?: string
           duration_minutes?: number | null
@@ -502,8 +539,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          area?: string
-          category?: string | null
+          area_id?: string
+          category_id?: string | null
           created_at?: string
           currency?: string
           duration_minutes?: number | null
@@ -521,6 +558,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "packages_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "packages_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "packages_guide_id_fkey"
             columns: ["guide_id"]
@@ -1007,3 +1058,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

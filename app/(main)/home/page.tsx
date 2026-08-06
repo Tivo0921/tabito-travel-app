@@ -4,21 +4,25 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Sparkles, BookOpen, Newspaper, Heart, ChevronRight } from 'lucide-react';
+import { Logo } from '@/components/logo';
 import { SearchBar } from '@/components/search-bar';
 import { CategoryChip } from '@/components/category-chip';
 import { SectionHeader } from '@/components/section-header';
 import { PackageCard } from '@/components/package-card';
 import { getPackages, getMagazineArticles, getCommunityRoutes } from '@/lib/supabase/queries';
+import { useT } from '@/lib/i18n/provider';
+import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 import type { Package, MagazineArticle, CommunityRoute } from '@/lib/types';
 
 const categories = [
-  { id: 'ai', label: 'AIおすすめ', icon: Sparkles },
-  { id: 'manner', label: 'マナーガイド', icon: BookOpen },
-  { id: 'magazine', label: 'マガジン', icon: Newspaper },
-  { id: 'saved', label: '保存済み', icon: Heart },
-];
+  { id: 'ai', labelKey: 'home.category.ai', icon: Sparkles },
+  { id: 'manner', labelKey: 'home.category.manner', icon: BookOpen },
+  { id: 'magazine', labelKey: 'home.category.magazine', icon: Newspaper },
+  { id: 'saved', labelKey: 'home.category.saved', icon: Heart },
+] satisfies { id: string; labelKey: TranslationKey; icon: typeof Sparkles }[];
 
 export default function HomePage() {
+  const t = useT();
   const [activeCategory, setActiveCategory] = useState('ai');
   const [packages, setPackages] = useState<Package[]>([]);
   const [magazineArticles, setMagazineArticles] = useState<MagazineArticle[]>([]);
@@ -33,30 +37,32 @@ export default function HomePage() {
   return (
     <div className="pt-[env(safe-area-inset-top)]">
       {/* Header */}
-      <header className="px-5 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-[var(--text-sub)]">こんにちは！</p>
+      <header className="px-5 pt-6 pb-4 lg:pt-10">
+        {/* サイドナビが無いモバイルのみロゴとアバターを出す */}
+        <div className="flex items-center justify-between mb-3 lg:hidden">
+          <Logo size="sm" priority />
           <Link href="/profile">
             <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-[var(--primary-soft)] bg-gray-100" />
           </Link>
         </div>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">
-          日本旅行を、もっと深く
+        <p className="text-[var(--text-sub)] mb-1">{t('home.greeting')}</p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)] lg:text-3xl">
+          {t('home.title')}
         </h1>
       </header>
 
       {/* Search */}
       <div className="px-5 mb-6">
-        <SearchBar placeholder="都市、ガイド、キーワードで検索" />
+        <SearchBar placeholder={t('home.searchPlaceholder')} className="lg:max-w-2xl" />
       </div>
 
       {/* Categories */}
       <div className="px-5 mb-8">
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 lg:flex-wrap lg:overflow-visible">
           {categories.map((cat) => (
             <CategoryChip
               key={cat.id}
-              label={cat.label}
+              label={t(cat.labelKey)}
               icon={cat.icon}
               isActive={activeCategory === cat.id}
               onClick={() => setActiveCategory(cat.id)}
@@ -68,13 +74,17 @@ export default function HomePage() {
       {/* Featured Packages */}
       <section className="px-5 mb-8">
         <SectionHeader
-          title="おすすめガイド"
-          subtitle="現地の先輩が厳選したコース"
+          title={t('home.section.packages')}
+          subtitle={t('home.section.packagesSub')}
           href="/explore"
+          actionLabel={t('common.seeMore')}
         />
-        <div className="space-y-4">
-          {packages.slice(0, 2).map((pkg) => (
-            <PackageCard key={pkg.id} package={pkg} />
+        {/* モバイルは2件の縦積み、PCは最大6件をグリッドで見せる */}
+        <div className="space-y-4 sm:grid sm:grid-cols-2 sm:gap-5 sm:space-y-0 xl:grid-cols-3">
+          {packages.slice(0, 6).map((pkg, i) => (
+            <div key={pkg.id} className={i >= 2 ? 'max-lg:hidden' : undefined}>
+              <PackageCard package={pkg} />
+            </div>
           ))}
         </div>
       </section>
@@ -82,16 +92,18 @@ export default function HomePage() {
       {/* Magazine Section */}
       <section className="px-5 mb-8">
         <SectionHeader
-          title="マガジン"
-          subtitle="日本旅行のインサイト"
+          title={t('home.section.magazine')}
+          subtitle={t('home.section.magazineSub')}
           href="/explore?tab=magazine"
+          actionLabel={t('common.seeMore')}
         />
-        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 -mx-5 px-5">
+        {/* モバイルは横スクロール、PCはグリッドに展開 */}
+        <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 -mx-5 px-5 lg:grid lg:grid-cols-3 lg:gap-6 lg:overflow-visible lg:mx-0 lg:px-0">
           {magazineArticles.map((article) => (
             <Link
               key={article.id}
               href={`/magazine/${article.id}`}
-              className="flex-shrink-0 w-64 group"
+              className="flex-shrink-0 w-64 group lg:w-auto"
             >
               <div className="relative aspect-[4/3] rounded-2xl overflow-hidden mb-3">
                 <Image
@@ -110,7 +122,7 @@ export default function HomePage() {
                 {article.title}
               </h3>
               <p className="text-sm text-[var(--text-sub)]">
-                {article.read_time}分で読める
+                {t('common.readTime', { min: article.read_time })}
               </p>
             </Link>
           ))}
@@ -120,11 +132,12 @@ export default function HomePage() {
       {/* Community Routes */}
       <section className="px-5 mb-8">
         <SectionHeader
-          title="コミュニティルート"
-          subtitle="旅行者がシェアしたコース"
+          title={t('home.section.community')}
+          subtitle={t('home.section.communitySub')}
           href="/explore?tab=community"
+          actionLabel={t('common.seeMore')}
         />
-        <div className="space-y-3">
+        <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
           {communityRoutes.map((route) => (
             <Link
               key={route.id}
@@ -149,7 +162,9 @@ export default function HomePage() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[var(--muted)]">{route.author.name}</span>
                   <span className="text-xs text-[var(--muted)]">•</span>
-                  <span className="text-xs text-[var(--primary)]">{route.likes} いいね</span>
+                  <span className="text-xs text-[var(--primary)]">
+                    {t('home.likes', { count: route.likes })}
+                  </span>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-[var(--muted)] self-center flex-shrink-0" />
@@ -164,12 +179,14 @@ export default function HomePage() {
           <div className="p-5 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-3xl">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-[var(--primary)] mb-1">クイックマナーチェック</p>
+                <p className="text-sm font-medium text-[var(--primary)] mb-1">
+                  {t('home.manner.eyebrow')}
+                </p>
                 <h3 className="text-lg font-bold text-[var(--text-main)]">
-                  日本旅行マナーガイド
+                  {t('home.manner.title')}
                 </h3>
                 <p className="text-sm text-[var(--text-sub)] mt-1">
-                  シーン別エチケットを事前にチェック
+                  {t('home.manner.desc')}
                 </p>
               </div>
               <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm">
