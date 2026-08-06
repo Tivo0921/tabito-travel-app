@@ -143,9 +143,9 @@ export default function PlanPage() {
   return (
     <div className="pt-[env(safe-area-inset-top)]">
       {/* Header */}
-      <header className="px-5 pt-6 pb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold text-[var(--text-main)]">旅行計画</h1>
+      <header className="px-5 pt-6 pb-4 lg:pt-10">
+        <div className="flex items-center justify-between mb-2 lg:max-w-4xl">
+          <h1 className="text-2xl font-bold text-[var(--text-main)] lg:text-3xl">旅行計画</h1>
           <button
             onClick={openNewPlanModal}
             className="p-2 bg-[var(--primary-soft)] rounded-full"
@@ -158,7 +158,8 @@ export default function PlanPage() {
 
       {/* AI Prompt Box */}
       <div className="px-5 mb-6">
-        <div className="p-4 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-2xl">
+        {/* PCでは横いっぱいに伸ばさず、ヘッダーや計画一覧と同じ幅で揃える */}
+        <div className="p-4 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-2xl lg:max-w-4xl">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-5 h-5 text-[var(--primary)]" />
             <span className="font-semibold text-[var(--text-main)]">AIルート推薦</span>
@@ -183,7 +184,7 @@ export default function PlanPage() {
 
       {/* Plans */}
       {plans.length === 0 ? (
-        <div className="px-5">
+        <div className="px-5 lg:max-w-4xl">
           <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
             <Calendar className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />
             <p className="text-[var(--text-main)] font-semibold mb-1">計画がまだありません</p>
@@ -197,7 +198,7 @@ export default function PlanPage() {
           </div>
         </div>
       ) : (
-        <div className="px-5 space-y-4 mb-8">
+        <div className="px-5 space-y-4 mb-8 lg:max-w-4xl">
           {/* Plan selector */}
           {plans.length > 1 && (
             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">

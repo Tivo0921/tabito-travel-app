@@ -59,8 +59,8 @@ export default function CommunityRoutePage({ params }: { params: Promise<{ id: s
       </div>
 
       {/* Content */}
-      <div className="px-5 -mt-4 relative z-10">
-        <div className="bg-white rounded-t-3xl pt-6 pb-8">
+      <div className="relative z-10">
+        <div className="bg-white rounded-t-3xl px-5 pt-6 pb-8">
           {/* Meta */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">

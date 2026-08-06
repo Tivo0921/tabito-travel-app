@@ -1,0 +1,88 @@
+import type { TranslationKey } from './ja';
+
+export const ko: Record<TranslationKey, string> = {
+  // 내비게이션
+  'nav.home': '홈',
+  'nav.explore': '탐색',
+  'nav.plan': '일정',
+  'nav.profile': '프로필',
+  'nav.settings': '설정',
+  'nav.help': '도움말',
+
+  // 공통
+  'common.seeMore': '더보기',
+  'common.loading': '불러오는 중...',
+  'common.settings': '설정',
+  'common.goHome': '홈으로',
+  'common.readTime': '{min}분이면 읽어요',
+
+  // 홈
+  'home.greeting': '안녕하세요!',
+  'home.title': '일본 여행을 더 깊이',
+  'home.searchPlaceholder': '도시, 가이드, 키워드로 검색',
+  'home.category.ai': 'AI 추천',
+  'home.category.manner': '매너 가이드',
+  'home.category.magazine': '매거진',
+  'home.category.saved': '저장됨',
+  'home.section.packages': '추천 가이드',
+  'home.section.packagesSub': '현지에 사는 선배들이 엄선한 코스',
+  'home.section.magazine': '매거진',
+  'home.section.magazineSub': '일본 여행 인사이트',
+  'home.section.community': '커뮤니티 루트',
+  'home.section.communitySub': '여행자들이 공유한 코스',
+  'home.likes': '좋아요 {count}',
+  'home.manner.eyebrow': '간단 매너 체크',
+  'home.manner.title': '일본 여행 매너 가이드',
+  'home.manner.desc': '상황별 에티켓을 미리 확인하세요',
+
+  // 탐색
+  'explore.title': '탐색',
+  'explore.searchPlaceholder': '가이드, 장소, 키워드로 검색',
+  'explore.tab.packages': '가이드',
+  'explore.tab.magazine': '매거진',
+  'explore.tab.community': '커뮤니티',
+  'explore.filter.area': '지역',
+  'explore.filter.category': '카테고리',
+  'explore.filter.all': '전체',
+  'explore.count.packages': '가이드 {count}개',
+  'explore.count.articles': '기사 {count}개',
+  'explore.count.routes': '루트 {count}개',
+  'explore.empty.title': '검색 결과가 없습니다',
+  'explore.empty.desc': '다른 키워드나 필터로 시도해 보세요',
+
+  // 프로필
+  'profile.title': '프로필',
+  'profile.guestUser': '게스트',
+  'profile.pleaseLogin': '로그인해 주세요',
+  'profile.edit': '편집',
+  'profile.stats.completed': '완료한 가이드',
+  'profile.stats.visited': '방문한 장소',
+  'profile.stats.saved': '저장한 항목',
+  'profile.loginCta': '로그인하고 모든 기능 사용하기',
+  'profile.tab.saved': '저장됨',
+  'profile.tab.recent': '최근 본 항목',
+  'profile.empty.saved': '저장한 항목이 없습니다',
+  'profile.empty.savedDesc': '마음에 드는 가이드를 저장해 보세요',
+  'profile.empty.recent': '최근 본 항목이 없습니다',
+  'profile.menu.creator': '가이드·크리에이터 관리',
+  'profile.logout': '로그아웃',
+
+  // 설정
+  'settings.title': '설정',
+  'settings.group.app': '앱 설정',
+  'settings.group.support': '지원',
+  'settings.group.account': '계정',
+  'settings.item.language': '언어 설정',
+  'settings.item.notifications': '알림 설정',
+  'settings.item.notificationsOn': '켜짐',
+  'settings.item.privacy': '개인정보 설정',
+  'settings.item.about': '앱 정보',
+  'settings.item.terms': '이용약관',
+  'settings.item.review': '앱 평가하기',
+  'settings.item.deleteAccount': '계정 삭제',
+
+  // 언어 설정
+  'language.title': '언어 설정',
+  'language.desc': '앱에서 사용할 언어를 선택하세요',
+  'language.note': '이 설정은 앱 화면의 언어만 바꿉니다. 가이드와 기사 본문은 작성된 언어 그대로 표시됩니다.',
+};

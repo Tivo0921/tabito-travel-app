@@ -154,12 +154,14 @@ export async function getPackageById(id: string, lang = DEFAULT_LANG): Promise<P
     `)
     .eq('id', id)
     .eq('package_translations.language', lang)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    console.error('getPackageById error:', error);
+  if (error) {
+    console.error('getPackageById error:', error.message, error);
     return null;
   }
+  // 該当なしは正常系（呼び出し側が「見つかりません」を表示する）
+  if (!data) return null;
 
   const t = Array.isArray(data.package_translations)
     ? data.package_translations[0]
@@ -358,12 +360,13 @@ export async function getMannerCategoryById(categoryId: string, lang = DEFAULT_L
     `)
     .eq('id', categoryId)
     .eq('manner_category_translations.language', lang)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    console.error('getMannerCategoryById error:', error);
+  if (error) {
+    console.error('getMannerCategoryById error:', error.message, error);
     return null;
   }
+  if (!data) return null;
 
   const t = Array.isArray(data.manner_category_translations)
     ? data.manner_category_translations[0]
@@ -456,12 +459,13 @@ export async function getMannerTipById(tipId: string, lang = DEFAULT_LANG): Prom
     `)
     .eq('id', tipId)
     .eq('manner_tip_translations.language', lang)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    console.error('getMannerTipById error:', error);
+  if (error) {
+    console.error('getMannerTipById error:', error.message, error);
     return null;
   }
+  if (!data) return null;
 
   const t = Array.isArray(data.manner_tip_translations)
     ? data.manner_tip_translations[0]
@@ -570,12 +574,13 @@ export async function getMagazineArticleById(id: string, lang = DEFAULT_LANG): P
     .select('*, magazine_article_translations!inner(title, excerpt, content)')
     .eq('id', id)
     .eq('magazine_article_translations.language', lang)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    console.error('getMagazineArticleById error:', error);
+  if (error) {
+    console.error('getMagazineArticleById error:', error.message, error);
     return null;
   }
+  if (!data) return null;
 
   const t = Array.isArray(data.magazine_article_translations)
     ? data.magazine_article_translations[0]
@@ -604,12 +609,13 @@ export async function getCommunityRouteById(id: string, lang = DEFAULT_LANG): Pr
     `)
     .eq('id', id)
     .eq('community_route_translations.language', lang)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    console.error('getCommunityRouteById error:', error);
+  if (error) {
+    console.error('getCommunityRouteById error:', error.message, error);
     return null;
   }
+  if (!data) return null;
 
   const t = Array.isArray(data.community_route_translations)
     ? data.community_route_translations[0]

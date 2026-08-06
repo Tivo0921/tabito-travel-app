@@ -88,8 +88,8 @@ export default function MagazineArticlePage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* Content */}
-      <div className="px-5 -mt-4 relative z-10">
-        <div className="bg-white rounded-t-3xl pt-6">
+      <div className="relative z-10">
+        <div className="bg-white rounded-t-3xl px-5 pt-6">
           <div className="flex items-center gap-4 mb-4 text-sm text-[var(--text-sub)]">
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />

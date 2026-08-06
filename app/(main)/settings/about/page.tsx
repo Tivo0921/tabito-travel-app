@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Github, Globe, Heart } from 'lucide-react';
+import { Logo } from '@/components/logo';
 
 const APP_VERSION = 'v1.0.0';
 
@@ -31,10 +32,7 @@ export default function AboutPage() {
       <div className="px-5 space-y-6 pb-8">
         {/* Brand */}
         <div className="flex flex-col items-center text-center py-6">
-          <div className="w-20 h-20 mb-4 rounded-3xl bg-white shadow-lg flex items-center justify-center">
-            <span className="text-4xl">🗾</span>
-          </div>
-          <div className="text-2xl font-bold text-[var(--primary)]">TABITO</div>
+          <Logo size="lg" className="mb-2" />
           <p className="text-sm text-[var(--text-sub)] mt-1">日本旅行をもっと深く</p>
           <span className="mt-3 px-3 py-1 rounded-full bg-white text-xs font-medium text-[var(--muted)] shadow-sm">
             {APP_VERSION}

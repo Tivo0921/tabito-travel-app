@@ -45,9 +45,11 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const [pkg, setPkg] = useState<Package | null>(null);
   const [spots, setSpots] = useState<Spot[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getPackageById(id).then(setPkg);
+    setLoading(true);
+    getPackageById(id).then(setPkg).finally(() => setLoading(false));
     getSpotsByPackageId(id).then(setSpots);
     getReviewsByPackageId(id).then(setReviews);
     isPackageSaved(id).then(setIsSaved);
@@ -106,10 +108,24 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
     router.push(`/guide/${id}`);
   };
 
-  if (!pkg) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-[var(--muted)]">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!pkg) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <p className="text-[var(--muted)]">ガイドが見つかりません</p>
+        <button
+          onClick={() => router.push('/home')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+        >
+          ホームへ
+        </button>
       </div>
     );
   }
@@ -162,7 +178,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Tags */}
-        <div className="absolute bottom-4 left-4 right-4">
+        <div className="absolute bottom-5 left-5 right-5">
           <div className="flex items-center gap-2 flex-wrap">
             {pkg.tags.map((tag) => (
               <span
@@ -177,8 +193,9 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Content */}
-      <div className="px-5 -mt-4 relative z-10">
-        <div className="bg-white rounded-t-3xl pt-6 pb-32">
+      {/* 左右の余白はパネルの内側に持たせる（外側だとヒーロー画像の下端がパネルの脇からはみ出す） */}
+      <div className="relative z-10">
+        <div className="bg-white rounded-t-3xl px-5 pt-6 pb-32">
           {/* Title & Meta */}
           <h1 className="text-2xl font-bold text-[var(--text-main)] mb-3 text-pretty">
             {pkg.title}
@@ -358,9 +375,11 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Bottom CTA */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="max-w-lg mx-auto flex items-center gap-4">
-          <div>
+      {/* lg:pl-64 … PCではサイドナビ分を空けて本文列と揃える */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] lg:pl-64">
+        <div className="max-w-lg mx-auto flex items-center gap-4 lg:max-w-6xl lg:px-6">
+          {/* ボタンがfullWidthなので、縮まないよう明示する（縮むと「円」が改行される） */}
+          <div className="flex-shrink-0 whitespace-nowrap">
             <p className="text-sm text-[var(--text-sub)]">料金</p>
             <p className="text-xl font-bold text-[var(--primary)]">
               {pkg.price.toLocaleString()}円
