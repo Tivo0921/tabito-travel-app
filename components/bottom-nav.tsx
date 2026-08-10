@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, CalendarDays, User } from 'lucide-react';
+import { Home, Compass, CalendarDays, User, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n/provider';
 import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
@@ -11,6 +11,7 @@ const navItems = [
   { href: '/home', labelKey: 'nav.home', icon: Home },
   { href: '/explore', labelKey: 'nav.explore', icon: Compass },
   { href: '/plan', labelKey: 'nav.plan', icon: CalendarDays },
+  { href: '/chat', labelKey: 'chat.nav', icon: MessageCircle },
   { href: '/profile', labelKey: 'nav.profile', icon: User },
 ] satisfies { href: string; labelKey: TranslationKey; icon: typeof Home }[];
 

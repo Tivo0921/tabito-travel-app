@@ -15,6 +15,10 @@ import type {
   CreatorSpotInput,
   Area,
   Category,
+  ChatThread,
+  ChatThreadSummary,
+  ChatMessage,
+  ChatListItem,
 } from '@/lib/types';
 
 const DEFAULT_LANG = 'ja';
@@ -895,11 +899,15 @@ export async function unsavePackage(packageId: string): Promise<void> {
 
 export async function hasPurchased(packageId: string): Promise<boolean> {
   const supabase = createClient();
+  // 自分の購入だけが見えるのは RLS (purchases_select_own) が保証している。
+  // 同一パッケージの再購入で複数行になりうるので limit(1) が必須。
+  // これが無いと maybeSingle() が「2行ある」エラーを返し、購入済みなのに false になる。
   const { data } = await supabase
     .from('purchases')
     .select('id')
     .eq('package_id', packageId)
     .eq('status', 'completed')
+    .limit(1)
     .maybeSingle();
   return !!data;
 }
@@ -1369,4 +1377,319 @@ export async function deleteCreatorSpot(
     .select('id', { count: 'exact', head: true })
     .eq('package_id', packageId);
   await supabase.from('packages').update({ spot_count: count ?? 0 }).eq('id', packageId);
+}
+
+// ────────────────────────────────────────────────
+// Chat (購入者 ↔ クリエイター)
+//   アクセス制御は RLS が担保する。ここでは絞り込みを書かない箇所があるが、
+//   参加者以外の行はそもそも返ってこない。
+// ────────────────────────────────────────────────
+
+/**
+ * パッケージのクリエイター(profiles.id)を返す。
+ * guides.user_id が null のシードガイドでは null になり、その場合チャットは提供しない。
+ */
+export async function getPackageCreatorUserId(packageId: string): Promise<string | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('packages')
+    .select('guides(user_id)')
+    .eq('id', packageId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('getPackageCreatorUserId error:', error.message, error);
+    return null;
+  }
+  const guide = Array.isArray(data?.guides) ? data.guides[0] : data?.guides;
+  return (guide as { user_id: string | null } | undefined)?.user_id ?? null;
+}
+
+/**
+ * 購入済みパッケージのスレッドを取得し、無ければ作る。
+ * 未購入・クリエイター未紐付けの場合は null。
+ */
+export async function getOrCreateChatThread(packageId: string): Promise<ChatThread | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  // 既存スレッド
+  const { data: existing } = await supabase
+    .from('chat_threads')
+    .select('*')
+    .eq('package_id', packageId)
+    .eq('buyer_id', user.id)
+    .limit(1)
+    .maybeSingle();
+  if (existing) return existing as ChatThread;
+
+  // 完了済みの購入が要る（RLS で自分の分しか見えない）
+  const { data: purchase } = await supabase
+    .from('purchases')
+    .select('id')
+    .eq('package_id', packageId)
+    .eq('status', 'completed')
+    .limit(1)
+    .maybeSingle();
+  if (!purchase) return null;
+
+  const creatorId = await getPackageCreatorUserId(packageId);
+  if (!creatorId) return null;
+
+  const { data, error } = await supabase
+    .from('chat_threads')
+    .insert({
+      purchase_id: purchase.id,
+      package_id: packageId,
+      buyer_id: user.id,
+      creator_id: creatorId,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('getOrCreateChatThread error:', error.message, error);
+    return null;
+  }
+  return data as ChatThread;
+}
+
+/** ログイン中ユーザーが参加している全スレッド（購入者・クリエイター両方の立場を含む） */
+export async function getChatThreads(): Promise<ChatThreadSummary[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('chat_threads')
+    .select(`
+      *,
+      packages(image_url, package_translations(title, language)),
+      buyer:profiles!chat_threads_buyer_id_fkey(display_name, avatar_url),
+      creator:profiles!chat_threads_creator_id_fkey(display_name, avatar_url)
+    `)
+    .order('last_message_at', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    console.error('getChatThreads error:', error.message, error);
+    return [];
+  }
+
+  const threads = (data ?? []) as Record<string, unknown>[];
+  if (threads.length === 0) return [];
+
+  const threadIds = threads.map((t) => t.id as string);
+
+  // 既読位置と直近メッセージをまとめて取得（スレッドごとのクエリを避ける）
+  const [{ data: reads }, { data: messages }] = await Promise.all([
+    supabase.from('chat_reads').select('thread_id, last_read_at').in('thread_id', threadIds),
+    supabase
+      .from('chat_messages')
+      .select('thread_id, body, created_at, sender_id')
+      .in('thread_id', threadIds)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  const readMap = new Map<string, string>();
+  for (const r of reads ?? []) readMap.set(r.thread_id as string, r.last_read_at as string);
+
+  const lastBody = new Map<string, string>();
+  const unread = new Map<string, number>();
+  for (const m of messages ?? []) {
+    const tid = m.thread_id as string;
+    if (!lastBody.has(tid)) lastBody.set(tid, m.body as string);
+    // 自分の発言は未読に数えない
+    if (m.sender_id === user.id) continue;
+    const readAt = readMap.get(tid);
+    if (!readAt || new Date(m.created_at as string) > new Date(readAt)) {
+      unread.set(tid, (unread.get(tid) ?? 0) + 1);
+    }
+  }
+
+  return threads.map((t) => {
+    const pkg = t.packages as { image_url: string | null; package_translations: unknown } | null;
+    const translations = (Array.isArray(pkg?.package_translations)
+      ? pkg?.package_translations
+      : [pkg?.package_translations]) as { title: string; language: string }[] | undefined;
+    // パッケージ名は投稿された言語のまま出す。日本語を優先し、無ければ先頭。
+    const title =
+      translations?.find((x) => x?.language === 'ja')?.title ?? translations?.[0]?.title ?? '';
+
+    const isBuyer = t.buyer_id === user.id;
+    const partner = (isBuyer ? t.creator : t.buyer) as
+      | { display_name: string | null; avatar_url: string | null }
+      | null;
+
+    return {
+      ...(t as unknown as ChatThread),
+      package_title: title,
+      package_image_url: pkg?.image_url ?? null,
+      partner_name: partner?.display_name ?? '',
+      partner_avatar_url: partner?.avatar_url ?? null,
+      last_message_body: lastBody.get(t.id as string) ?? null,
+      unread_count: unread.get(t.id as string) ?? 0,
+    } satisfies ChatThreadSummary;
+  });
+}
+
+export async function getChatThreadById(threadId: string): Promise<ChatThread | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('chat_threads')
+    .select('*')
+    .eq('id', threadId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('getChatThreadById error:', error.message, error);
+    return null;
+  }
+  return (data as ChatThread) ?? null;
+}
+
+export async function getChatMessages(threadId: string): Promise<ChatMessage[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('thread_id', threadId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('getChatMessages error:', error.message, error);
+    return [];
+  }
+  return (data ?? []) as ChatMessage[];
+}
+
+export async function sendChatMessage(threadId: string, body: string): Promise<ChatMessage | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .insert({ thread_id: threadId, sender_id: user.id, body: trimmed })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('sendChatMessage error:', error.message, error);
+    return null;
+  }
+  return data as ChatMessage;
+}
+
+/** スレッドを開いた／新着を見た時点で既読位置を進める */
+export async function markChatThreadRead(threadId: string): Promise<void> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const { error } = await supabase
+    .from('chat_reads')
+    .upsert(
+      { thread_id: threadId, user_id: user.id, last_read_at: new Date().toISOString() },
+      { onConflict: 'thread_id,user_id' },
+    );
+
+  if (error) console.error('markChatThreadRead error:', error.message, error);
+}
+
+/** ナビに出す全スレッド合計の未読数 */
+export async function getTotalUnreadCount(): Promise<number> {
+  const threads = await getChatThreads();
+  return threads.reduce((sum, t) => sum + t.unread_count, 0);
+}
+
+/**
+ * メッセージ一覧に出す行を組み立てる。
+ * スレッドがあるものに加えて、「購入済みだがまだ会話が無い」相手も出す。
+ * これが無いと購入直後に一覧が空のままで、チャットを始める入口が無くなる。
+ */
+export async function getChatListItems(): Promise<ChatListItem[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const threads = await getChatThreads();
+
+  const items: ChatListItem[] = threads.map((t) => ({
+    thread_id: t.id,
+    package_id: t.package_id,
+    package_title: t.package_title,
+    partner_name: t.partner_name,
+    partner_avatar_url: t.partner_avatar_url,
+    last_message_body: t.last_message_body,
+    last_message_at: t.last_message_at,
+    unread_count: t.unread_count,
+  }));
+
+  // 購入済みでまだスレッドが無いパッケージ（RLSで自分の購入しか返らない）
+  const { data: purchases, error } = await supabase
+    .from('purchases')
+    .select(`
+      package_id,
+      packages(
+        package_translations(title, language),
+        guides(user_id, guide_translations(name))
+      )
+    `)
+    .eq('status', 'completed');
+
+  if (error) {
+    console.error('getChatListItems error:', error.message, error);
+    return items;
+  }
+
+  const seen = new Set(items.map((i) => i.package_id));
+
+  for (const row of purchases ?? []) {
+    const packageId = row.package_id as string;
+    if (seen.has(packageId)) continue;
+    seen.add(packageId);
+
+    const pkg = row.packages as Record<string, unknown> | null;
+    const guide = (Array.isArray(pkg?.guides) ? pkg?.guides[0] : pkg?.guides) as
+      | { user_id: string | null; guide_translations: unknown }
+      | undefined;
+
+    // クリエイター不在、または自分が作成者の場合はチャットが成立しない
+    if (!guide?.user_id || guide.user_id === user.id) continue;
+
+    const translations = (Array.isArray(pkg?.package_translations)
+      ? pkg?.package_translations
+      : [pkg?.package_translations]) as { title: string; language: string }[] | undefined;
+    const title =
+      translations?.find((x) => x?.language === 'ja')?.title ?? translations?.[0]?.title ?? '';
+
+    const gt = (Array.isArray(guide.guide_translations)
+      ? guide.guide_translations[0]
+      : guide.guide_translations) as { name: string } | undefined;
+
+    items.push({
+      thread_id: null,
+      package_id: packageId,
+      package_title: title,
+      partner_name: gt?.name ?? '',
+      partner_avatar_url: null,
+      last_message_body: null,
+      last_message_at: null,
+      unread_count: 0,
+    });
+  }
+
+  // 直近のやり取り順。未会話（null）は末尾へ。
+  return items.sort((a, b) => {
+    if (a.last_message_at && b.last_message_at) {
+      return a.last_message_at < b.last_message_at ? 1 : -1;
+    }
+    if (a.last_message_at) return -1;
+    if (b.last_message_at) return 1;
+    return 0;
+  });
 }
