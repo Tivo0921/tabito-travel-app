@@ -60,7 +60,7 @@ export default function ReviewPage() {
                 onClick={() => setRating(n)}
                 onMouseEnter={() => setHover(n)}
                 onMouseLeave={() => setHover(0)}
-                aria-label={t('review.star', { n })}
+                aria-label={t('review.star', { count: n })}
                 className="transition-transform hover:scale-110"
               >
                 <Star

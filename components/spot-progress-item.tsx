@@ -1,3 +1,5 @@
+'use client';
+
 import Image from 'next/image';
 import { Check, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -55,7 +57,7 @@ export function SpotProgressItem({ spot, status, onClick }: SpotProgressItemProp
         <div className="flex items-center gap-2 text-xs text-[var(--text-sub)] mt-0.5">
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {t('spot.minutes', { min: spot.duration_minutes ?? 0 })}
+            {t('spot.minutes', { count: spot.duration_minutes ?? 0 })}
           </span>
         </div>
       </div>

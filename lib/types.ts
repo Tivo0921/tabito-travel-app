@@ -57,7 +57,8 @@ export interface Package {
   guide?: Guide;
   area: string;          // 表示用の名前（areas.name を JOIN で解決）
   area_id?: string;      // 編集フォーム用の FK
-  duration: string;
+  /** 分。表示用の整形は lib/i18n/format.ts の formatDuration に集約する */
+  duration_minutes: number | null;
   price: number;
   currency: string;
   rating: number;

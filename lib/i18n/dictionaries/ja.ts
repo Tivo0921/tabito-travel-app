@@ -18,7 +18,7 @@ export const ja = {
   'common.loading': '読み込み中...',
   'common.settings': '設定',
   'common.goHome': 'ホームへ',
-  'common.readTime': '{min}分で読める',
+  'common.readTime': '{count}分で読める',
 
   // ホーム
   'home.greeting': 'こんにちは！',
@@ -206,7 +206,7 @@ export const ja = {
   'guide.notFound': 'ガイドが見つかりません',
   'guide.videoPending': '動画は準備中です',
   'guide.spotCount': '{current} / {total} スポット',
-  'guide.duration': '約{min}分かかります',
+  'guide.duration': '約{count}分かかります',
   'guide.description': '現地ガイドの説明',
   'guide.localTips': 'ローカルtips',
   'guide.phrases': '役立つ日本語',
@@ -390,7 +390,7 @@ export const ja = {
   'mannerTip.dont': 'これは避けましょう',
 
   // 共通UI部品
-  'spot.minutes': '{min}分',
+  'spot.minutes': '{count}分',
   'spot.current': '現在',
   'search.placeholder': '検索キーワードを入力',
   'guideBadge.location': '{location}ガイド',
@@ -409,7 +409,7 @@ export const ja = {
   'deleteAccount.dataList': 'プロフィール、旅行計画、保存した項目、購入履歴を含むすべてのデータが完全に削除されます。',
   'deleteAccount.confirmPrefix': '削除を続けるには、下の欄に「',
   'deleteAccount.deleting': '削除しています...',
-  'review.star': '{n}つ星',
+  'review.star': '{count}つ星',
   'review.commentLabel': 'ご意見・ご要望（任意）',
   'review.submit': '送信する',
   'privacy.group.usage': 'データ利用',
@@ -506,6 +506,28 @@ export const ja = {
   'policy.s4.p2': '「アカウント削除」から、アカウントおよび関連データの削除を申請できます。',
   'policy.s5.title': '5. お問い合わせ',
   'policy.s5.p1': '本ポリシーに関するお問い合わせは support@tabito.site までご連絡ください。',
+
+  // 所要時間（分をDBに持ち、表示時に整形する）
+  'duration.days': '{count}日',
+  'duration.halfDay': '半日',
+  'duration.hours': '{count}時間',
+  'duration.minutes': '{count}分',
+  // 単数形（日本語は単複を区別しないので複数形と同じ）
+  'common.readTime_one': '{count}分で読める',
+  'explore.count.packages_one': '{count}件のガイド',
+  'explore.count.articles_one': '{count}件の記事',
+  'explore.count.routes_one': '{count}件のルート',
+  'package.tab.review_one': 'レビュー ({count})',
+  'package.section.spots_one': '含まれるスポット ({count}か所)',
+  'creator.reviewCount_one': '{count}件',
+  'review.star_one': '{count}つ星',
+  'home.likes_one': '{count} いいね',
+  'guide.showAllSpots_one': '全スポットを見る ({count}か所)',
+  'pkgEdit.spots_one': 'スポット ({count}件)',
+  'spot.minutes_one': '{count}分',
+  'duration.days_one': '{count}日',
+  'duration.hours_one': '{count}時間',
+  'duration.minutes_one': '{count}分',
 
   // 言語設定
   'language.title': '言語設定',

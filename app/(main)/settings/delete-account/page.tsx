@@ -5,7 +5,20 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useT } from '@/lib/i18n/provider';
+import { ja } from '@/lib/i18n/dictionaries/ja';
+import { en } from '@/lib/i18n/dictionaries/en';
+import { ko } from '@/lib/i18n/dictionaries/ko';
 
+
+/**
+ * 確認ワードは大文字小文字を無視し、3言語いずれでも受け付ける。
+ * 英語表示は 'DELETE' なので、画面の指示どおり小文字で打った人が
+ * 何のエラーも出ないまま退会できなくなるのを防ぐ。
+ * 入力途中に言語を切り替えても一致が外れない。
+ */
+const ACCEPTED_CONFIRM_WORDS = [ja, en, ko].map((d) =>
+  d['deleteAccount.confirmWord'].toLowerCase(),
+);
 
 export default function DeleteAccountPage() {
   const t = useT();
@@ -14,7 +27,7 @@ export default function DeleteAccountPage() {
   const [status, setStatus] = useState<'idle' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const canDelete = confirmText.trim() === t('deleteAccount.confirmWord');
+  const canDelete = ACCEPTED_CONFIRM_WORDS.includes(confirmText.trim().toLowerCase());
 
   const handleDelete = async () => {
     if (!canDelete) return;

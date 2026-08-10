@@ -2,8 +2,9 @@
 
 import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
-import { useT } from '@/lib/i18n/provider';
+import { useT, useLocale } from '@/lib/i18n/provider';
 import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
+import { formatDate } from '@/lib/i18n/format';
 
 const LAST_UPDATED = '2026-07-20';
 
@@ -17,6 +18,7 @@ const SECTIONS: { titleKey: TranslationKey; bodyKeys: TranslationKey[] }[] = [
 
 export default function PrivacyPolicyPage() {
   const t = useT();
+  const { locale } = useLocale();
   const router = useRouter();
 
   return (
@@ -30,7 +32,7 @@ export default function PrivacyPolicyPage() {
           <span className="text-sm font-medium">{t('privacy.title')}</span>
         </button>
         <h1 className="text-2xl font-bold text-[var(--text-main)]">{t('privacy.policy')}</h1>
-        <p className="text-sm text-[var(--text-sub)] mt-1">{t('legal.lastUpdated', { date: LAST_UPDATED })}</p>
+        <p className="text-sm text-[var(--text-sub)] mt-1">{t('legal.lastUpdated', { date: formatDate(LAST_UPDATED, locale) })}</p>
       </header>
 
       <div className="px-5 pb-10">

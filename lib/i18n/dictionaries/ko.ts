@@ -14,7 +14,7 @@ export const ko: Record<TranslationKey, string> = {
   'common.loading': '불러오는 중...',
   'common.settings': '설정',
   'common.goHome': '홈으로',
-  'common.readTime': '{min}분이면 읽어요',
+  'common.readTime': '{count}분이면 읽어요',
 
   // 홈
   'home.greeting': '안녕하세요!',
@@ -202,7 +202,7 @@ export const ko: Record<TranslationKey, string> = {
   'guide.notFound': '가이드를 찾을 수 없습니다',
   'guide.videoPending': '영상은 준비 중입니다',
   'guide.spotCount': '{current} / {total} 스폿',
-  'guide.duration': '약 {min}분 걸립니다',
+  'guide.duration': '약 {count}분 걸립니다',
   'guide.description': '현지 가이드의 설명',
   'guide.localTips': '로컬 tips',
   'guide.phrases': '유용한 일본어',
@@ -386,7 +386,7 @@ export const ko: Record<TranslationKey, string> = {
   'mannerTip.dont': '이건 피하세요',
 
   // 공통 UI
-  'spot.minutes': '{min}분',
+  'spot.minutes': '{count}분',
   'spot.current': '현재',
   'search.placeholder': '검색 키워드를 입력하세요',
   'guideBadge.location': '{location} 가이드',
@@ -405,7 +405,7 @@ export const ko: Record<TranslationKey, string> = {
   'deleteAccount.dataList': '프로필, 여행 일정, 저장한 항목, 구매 내역을 포함한 모든 데이터가 완전히 삭제됩니다.',
   'deleteAccount.confirmPrefix': '삭제를 계속하려면 아래 칸에 「',
   'deleteAccount.deleting': '삭제하는 중...',
-  'review.star': '별 {n}개',
+  'review.star': '별 {count}개',
   'review.commentLabel': '의견·요청 (선택)',
   'review.submit': '보내기',
   'privacy.group.usage': '데이터 이용',
@@ -502,6 +502,28 @@ export const ko: Record<TranslationKey, string> = {
   'policy.s4.p2': '"계정 삭제"에서 계정 및 관련 데이터의 삭제를 신청할 수 있습니다.',
   'policy.s5.title': '5. 문의',
   'policy.s5.p1': '본 정책에 관한 문의는 support@tabito.site 로 연락해 주세요.',
+
+  // 소요 시간 (DB에는 분으로 저장하고 표시할 때 정리)
+  'duration.days': '{count}일',
+  'duration.halfDay': '반나절',
+  'duration.hours': '{count}시간',
+  'duration.minutes': '{count}분',
+  // 단수형 (한국어는 단복수를 구분하지 않아 복수형과 동일)
+  'common.readTime_one': '{count}분이면 읽어요',
+  'explore.count.packages_one': '가이드 {count}개',
+  'explore.count.articles_one': '기사 {count}개',
+  'explore.count.routes_one': '루트 {count}개',
+  'package.tab.review_one': '리뷰 ({count})',
+  'package.section.spots_one': '포함된 스폿 ({count}곳)',
+  'creator.reviewCount_one': '{count}건',
+  'review.star_one': '별 {count}개',
+  'home.likes_one': '좋아요 {count}',
+  'guide.showAllSpots_one': '전체 스폿 보기 ({count}곳)',
+  'pkgEdit.spots_one': '스폿 ({count}건)',
+  'spot.minutes_one': '{count}분',
+  'duration.days_one': '{count}일',
+  'duration.hours_one': '{count}시간',
+  'duration.minutes_one': '{count}분',
 
   // 언어 설정
   'language.title': '언어 설정',

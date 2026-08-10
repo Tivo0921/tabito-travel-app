@@ -14,7 +14,7 @@ export const en: Record<TranslationKey, string> = {
   'common.loading': 'Loading...',
   'common.settings': 'Settings',
   'common.goHome': 'Go to home',
-  'common.readTime': '{min} min read',
+  'common.readTime': '{count} min read',
 
   // Home
   'home.greeting': 'Hello!',
@@ -202,7 +202,7 @@ export const en: Record<TranslationKey, string> = {
   'guide.notFound': 'Guide not found',
   'guide.videoPending': 'Video coming soon',
   'guide.spotCount': 'Spot {current} of {total}',
-  'guide.duration': 'About {min} min',
+  'guide.duration': 'About {count} min',
   'guide.description': 'From your local guide',
   'guide.localTips': 'Local tips',
   'guide.phrases': 'Useful Japanese',
@@ -386,7 +386,7 @@ export const en: Record<TranslationKey, string> = {
   'mannerTip.dont': 'Avoid this',
 
   // Shared UI
-  'spot.minutes': '{min} min',
+  'spot.minutes': '{count} min',
   'spot.current': 'Now',
   'search.placeholder': 'Enter a keyword',
   'guideBadge.location': '{location} guide',
@@ -405,7 +405,7 @@ export const en: Record<TranslationKey, string> = {
   'deleteAccount.dataList': 'Everything will be permanently deleted, including your profile, trip plans, saved items and purchase history.',
   'deleteAccount.confirmPrefix': 'To continue, type "',
   'deleteAccount.deleting': 'Deleting...',
-  'review.star': '{n} stars',
+  'review.star': '{count} stars',
   'review.commentLabel': 'Comments (optional)',
   'review.submit': 'Submit',
   'privacy.group.usage': 'Data usage',
@@ -502,6 +502,28 @@ export const en: Record<TranslationKey, string> = {
   'policy.s4.p2': 'You can request deletion of your account and related data from "Delete account".',
   'policy.s5.title': '5. Contact',
   'policy.s5.p1': 'For enquiries about this policy, please contact support@tabito.site.',
+
+  // Duration (stored as minutes; formatted at render time)
+  'duration.days': '{count} days',
+  'duration.halfDay': 'Half day',
+  'duration.hours': '{count} hours',
+  'duration.minutes': '{count} min',
+  // Singular forms
+  'common.readTime_one': '{count} min read',
+  'explore.count.packages_one': '{count} guide',
+  'explore.count.articles_one': '{count} article',
+  'explore.count.routes_one': '{count} route',
+  'package.tab.review_one': 'Reviews ({count})',
+  'package.section.spots_one': 'Spots included ({count})',
+  'creator.reviewCount_one': '{count} review',
+  'review.star_one': '{count} star',
+  'home.likes_one': '{count} like',
+  'guide.showAllSpots_one': 'See all spots ({count})',
+  'pkgEdit.spots_one': 'Spots ({count})',
+  'spot.minutes_one': '{count} min',
+  'duration.days_one': '{count} day',
+  'duration.hours_one': '{count} hour',
+  'duration.minutes_one': '{count} min',
 
   // Language settings
   'language.title': 'Language',
