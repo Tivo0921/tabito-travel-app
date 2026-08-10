@@ -25,7 +25,8 @@ import {
   setPackageStatus,
 } from '@/lib/supabase/queries';
 import type { Guide } from '@/lib/types';
-import { useT } from '@/lib/i18n/provider';
+import { useT, useLocale } from '@/lib/i18n/provider';
+import { formatPrice } from '@/lib/i18n/format';
 
 type CreatorPackage = {
   id: string;
@@ -40,6 +41,7 @@ type CreatorPackage = {
 
 export default function CreatorPage() {
   const t = useT();
+  const { locale } = useLocale();
   const router = useRouter();
   const [guide, setGuide] = useState<Guide | null>(null);
   const [packages, setPackages] = useState<CreatorPackage[]>([]);
@@ -240,7 +242,11 @@ export default function CreatorPage() {
                         </div>
                         <p className="font-semibold text-[var(--text-main)] text-sm line-clamp-2">{pkg.title}</p>
                         <p className="text-xs text-[var(--text-sub)] mt-1">
-                          {t('creator.meta', { area: pkg.area, spots: pkg.spot_count, price: pkg.price.toLocaleString() })}
+                          {t('creator.meta', {
+                            area: pkg.area,
+                            spots: t('creator.spotCount', { count: pkg.spot_count }),
+                            price: formatPrice(pkg.price, locale, t),
+                          })}
                         </p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-[var(--muted)] self-center flex-shrink-0" />

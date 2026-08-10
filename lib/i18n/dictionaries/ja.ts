@@ -373,7 +373,9 @@ export const ja = {
   'creator.action.publish': '公開する',
   'creator.action.delete': '削除',
   'creator.confirmDelete': 'このパッケージを削除しますか？',
-  'creator.meta': '{area} · {spots}スポット · ¥{price}',
+  'creator.meta': '{area} · {spots} · {price}',
+  'creator.spotCount': '{count}スポット',
+  'creator.spotCount_one': '{count}スポット',
 
   // ルート／記事／マナー詳細
   'route.notFound': 'ルートが見つかりません',

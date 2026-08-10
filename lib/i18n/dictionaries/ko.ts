@@ -369,7 +369,9 @@ export const ko: Record<TranslationKey, string> = {
   'creator.action.publish': '공개하기',
   'creator.action.delete': '삭제',
   'creator.confirmDelete': '이 패키지를 삭제할까요?',
-  'creator.meta': '{area} · {spots}스폿 · ¥{price}',
+  'creator.meta': '{area} · {spots} · {price}',
+  'creator.spotCount': '{count}스폿',
+  'creator.spotCount_one': '{count}스폿',
 
   // 루트/기사/매너 상세
   'route.notFound': '루트를 찾을 수 없습니다',

@@ -369,7 +369,9 @@ export const en: Record<TranslationKey, string> = {
   'creator.action.publish': 'Publish',
   'creator.action.delete': 'Delete',
   'creator.confirmDelete': 'Delete this package?',
-  'creator.meta': '{area} · {spots} spots · ¥{price}',
+  'creator.meta': '{area} · {spots} · {price}',
+  'creator.spotCount': '{count} spots',
+  'creator.spotCount_one': '{count} spot',
 
   // Route / article / etiquette detail
   'route.notFound': 'Route not found',
