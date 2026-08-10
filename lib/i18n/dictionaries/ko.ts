@@ -81,6 +81,21 @@ export const ko: Record<TranslationKey, string> = {
   'settings.item.review': '앱 평가하기',
   'settings.item.deleteAccount': '계정 삭제',
 
+  // 채팅
+  'chat.title': '메시지',
+  'chat.nav': '메시지',
+  'chat.askCreator': '크리에이터에게 문의하기',
+  'chat.empty.title': '아직 메시지가 없습니다',
+  'chat.empty.desc': '가이드를 구매하면 만든 크리에이터에게 질문할 수 있어요',
+  'chat.inputPlaceholder': '메시지를 입력하세요',
+  'chat.send': '보내기',
+  'chat.read': '읽음',
+  'chat.noMessages': '아직 메시지가 없습니다. 편하게 질문해 보세요',
+  'chat.threadNotFound': '채팅을 찾을 수 없습니다',
+  'chat.loadFailed': '메시지를 보내지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
+  'chat.aboutPackage': '「{title}」에 대해',
+  'chat.readOnly': '종료된 채팅입니다. 읽기만 가능합니다',
+  'chat.startPrompt': '메시지를 보내 대화를 시작해 보세요',
 
   // 일정
   'plan.title': '여행 일정',

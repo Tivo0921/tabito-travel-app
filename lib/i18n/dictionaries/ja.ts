@@ -85,6 +85,21 @@ export const ja = {
   'settings.item.review': 'アプリを評価する',
   'settings.item.deleteAccount': 'アカウント削除',
 
+  // チャット
+  'chat.title': 'メッセージ',
+  'chat.nav': 'メッセージ',
+  'chat.askCreator': 'クリエイターに質問する',
+  'chat.empty.title': 'メッセージはまだありません',
+  'chat.empty.desc': 'ガイドを購入すると、作成したクリエイターに質問できます',
+  'chat.inputPlaceholder': 'メッセージを入力',
+  'chat.send': '送信',
+  'chat.read': '既読',
+  'chat.noMessages': 'まだメッセージがありません。気軽に質問してみましょう',
+  'chat.threadNotFound': 'チャットが見つかりません',
+  'chat.loadFailed': 'メッセージを送信できませんでした。通信状況を確認してもう一度お試しください',
+  'chat.aboutPackage': '「{title}」について',
+  'chat.readOnly': 'このチャットは終了しました。閲覧のみ可能です',
+  'chat.startPrompt': 'メッセージを送ってみましょう',
 
   // 計画
   'plan.title': '旅行計画',

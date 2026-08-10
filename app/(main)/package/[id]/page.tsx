@@ -14,6 +14,7 @@ import {
   Heart,
   Share2,
   ShoppingBag,
+  MessageCircle,
 } from 'lucide-react';
 import { cn, getYouTubeEmbedUrl } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
@@ -28,6 +29,8 @@ import {
   savePackage,
   unsavePackage,
   hasPurchased,
+  getPackageCreatorUserId,
+  getOrCreateChatThread,
 } from '@/lib/supabase/queries';
 import { useT } from '@/lib/i18n/provider';
 import type { Package, Spot, Review } from '@/lib/types';
@@ -48,6 +51,8 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const [spots, setSpots] = useState<Spot[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canChat, setCanChat] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -56,8 +61,22 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
     getReviewsByPackageId(id).then(setReviews);
     isPackageSaved(id).then(setIsSaved);
     hasPurchased(id).then(setIsPurchased);
+    // チャットを出す条件: クリエイターにアカウントがあり、かつ自分自身でないこと。
+    // 自分が作ったパッケージを自分で買うと buyer_id = creator_id となり
+    // DB制約で弾かれてボタンが無反応になるため、そもそも出さない。
+    getPackageCreatorUserId(id).then(async (creatorId) => {
+      if (!creatorId) return setCanChat(false);
+      const { data: { user } } = await createClient().auth.getUser();
+      setCanChat(!!user && user.id !== creatorId);
+    });
   }, [id]);
 
+  const handleOpenChat = async () => {
+    setOpeningChat(true);
+    const thread = await getOrCreateChatThread(id);
+    setOpeningChat(false);
+    if (thread) router.push(`/chat/${thread.id}`);
+  };
 
   const handleToggleSave = async () => {
     if (isSaved) {
@@ -389,9 +408,23 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
             </p>
           </div>
           {isPurchased ? (
-            <CTAButton onClick={handleStartGuide} fullWidth>
-              {t('package.startGuide')}
-            </CTAButton>
+            <>
+              <CTAButton onClick={handleStartGuide} fullWidth>
+                {t('package.startGuide')}
+              </CTAButton>
+              {/* クリエイターのアカウントが無いガイド(シード等)ではチャットを出さない */}
+              {canChat && (
+                <button
+                  onClick={handleOpenChat}
+                  disabled={openingChat}
+                  aria-label={t('chat.askCreator')}
+                  title={t('chat.askCreator')}
+                  className="flex-shrink-0 p-3 rounded-2xl border border-[var(--border)] text-[var(--primary)] hover:bg-[var(--primary-soft)]/40 transition-colors disabled:opacity-50"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+              )}
+            </>
           ) : (
             <CTAButton onClick={handleOpenPurchaseModal} fullWidth>
               {t('package.buyAndStart')}

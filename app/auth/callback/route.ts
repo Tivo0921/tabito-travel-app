@@ -12,15 +12,20 @@ export async function GET(request: Request) {
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // 初回ログイン時にprofilesレコードを作成（既存の場合は無視）
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: user.id,
-          display_name: user.user_metadata?.full_name ?? user.email ?? 'ユーザー',
-          avatar_url: user.user_metadata?.avatar_url ?? null,
-          native_language: 'ko',
-        });
-        if (profileError && profileError.code !== '23505') {
-          console.error('Profile creation error:', profileError);
+        // 初回ログイン時に profiles を作成し、再ログイン時は最新情報に更新する。
+        // email は新着メッセージ通知の宛先に使うので Google から取得した値を保持する。
+        const { error: profileError } = await supabase.from('profiles').upsert(
+          {
+            id: user.id,
+            display_name: user.user_metadata?.full_name ?? user.email ?? 'ユーザー',
+            avatar_url: user.user_metadata?.avatar_url ?? null,
+            email: user.email ?? null,
+            native_language: 'ko',
+          },
+          { onConflict: 'id' },
+        );
+        if (profileError) {
+          console.error('Profile upsert error:', profileError.message, profileError);
         }
       }
       return NextResponse.redirect(`${origin}${next}`);

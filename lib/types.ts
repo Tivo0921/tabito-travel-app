@@ -181,3 +181,53 @@ export interface CommunityRoute {
   likes: number;
   created_at: string;
 }
+
+// ────────────────────────────────────────────────
+// Chat (購入者 ↔ クリエイター)
+// ────────────────────────────────────────────────
+
+export interface ChatThread {
+  id: string;
+  purchase_id: string;
+  package_id: string;
+  buyer_id: string;
+  creator_id: string;
+  status: 'open' | 'read_only' | 'closed';
+  last_message_at: string | null;
+  created_at: string;
+}
+
+/** 一覧表示用。相手の名前とパッケージ名を添えたスレッド */
+export interface ChatThreadSummary extends ChatThread {
+  package_title: string;
+  package_image_url: string | null;
+  /** ログイン中のユーザーから見た相手 */
+  partner_name: string;
+  partner_avatar_url: string | null;
+  last_message_body: string | null;
+  unread_count: number;
+}
+
+/**
+ * メッセージ一覧の1行。
+ * 購入直後でまだ誰も発言していない場合はスレッドが無いので thread_id は null になる。
+ * その行を開いた時点でスレッドを作る。
+ */
+export interface ChatListItem {
+  thread_id: string | null;
+  package_id: string;
+  package_title: string;
+  partner_name: string;
+  partner_avatar_url: string | null;
+  last_message_body: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+}

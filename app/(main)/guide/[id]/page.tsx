@@ -12,13 +12,20 @@ import {
   ChevronUp,
   Check,
   PartyPopper,
+  MessageCircle,
 } from 'lucide-react';
 import { cn, getYouTubeEmbedUrl } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
 import { SpotProgressItem } from '@/components/spot-progress-item';
 import { JapanesePhraseCard } from '@/components/japanese-phrase-card';
 import { MannerTipBox } from '@/components/manner-tip-box';
-import { getPackageById, getSpotsByPackageId } from '@/lib/supabase/queries';
+import {
+  getPackageById,
+  getSpotsByPackageId,
+  getPackageCreatorUserId,
+  getOrCreateChatThread,
+} from '@/lib/supabase/queries';
+import { createClient } from '@/lib/supabase/client';
 import { useT } from '@/lib/i18n/provider';
 import type { Package, Spot } from '@/lib/types';
 
@@ -32,6 +39,8 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
   const [pkg, setPkg] = useState<Package | null>(null);
   const [spots, setSpots] = useState<Spot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canChat, setCanChat] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const t = useT();
 
   useEffect(() => {
@@ -40,8 +49,21 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
       getSpotsByPackageId(id).then(setSpots),
     ]).finally(() => setLoading(false));
 
+    // チャットを出す条件は package 詳細と同じ:
+    // クリエイターにアカウントがあり、かつ自分自身でないこと
+    getPackageCreatorUserId(id).then(async (creatorId) => {
+      if (!creatorId) return setCanChat(false);
+      const { data: { user } } = await createClient().auth.getUser();
+      setCanChat(!!user && user.id !== creatorId);
+    });
   }, [id]);
 
+  const handleOpenChat = async () => {
+    setOpeningChat(true);
+    const thread = await getOrCreateChatThread(id);
+    setOpeningChat(false);
+    if (thread) router.push(`/chat/${thread.id}`);
+  };
 
   const currentSpot = spots[currentSpotIndex];
   const progress = spots.length > 0 ? ((currentSpotIndex + 1) / spots.length) * 100 : 0;
@@ -332,6 +354,19 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               t('guide.next')
             )}
           </CTAButton>
+          {/* ガイド進行中にクリエイターへ質問できるようにする。
+              クリエイター不在・自分が作成者の場合は出さない（package詳細と同じ条件） */}
+          {canChat && (
+            <button
+              onClick={handleOpenChat}
+              disabled={openingChat}
+              aria-label={t('chat.askCreator')}
+              title={t('chat.askCreator')}
+              className="flex-shrink-0 p-3 rounded-2xl border border-[var(--border)] text-[var(--primary)] hover:bg-[var(--primary-soft)]/40 transition-colors disabled:opacity-50"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
     </div>
