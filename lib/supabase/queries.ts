@@ -58,13 +58,6 @@ function relName(rel: unknown): string {
   return (obj as { name?: string } | undefined)?.name ?? '';
 }
 
-function minutesToDuration(minutes: number | null): string {
-  if (!minutes) return '';
-  if (minutes >= 480) return `${Math.round(minutes / 480)}日`;
-  if (minutes >= 240) return '半日';
-  return `${minutes}分`;
-}
-
 // ────────────────────────────────────────────────
 // Packages
 // ────────────────────────────────────────────────
@@ -121,7 +114,7 @@ export async function getPackages(lang = DEFAULT_LANG): Promise<Package[]> {
       } as Guide : undefined,
       area: relName(row.areas),
       area_id: row.area_id,
-      duration: minutesToDuration(row.duration_minutes),
+      duration_minutes: row.duration_minutes,
       price: row.price,
       currency: row.currency,
       rating: Number(row.rating),
@@ -190,7 +183,7 @@ export async function getPackageById(id: string, lang = DEFAULT_LANG): Promise<P
     } as Guide : undefined,
     area: relName(data.areas),
     area_id: data.area_id,
-    duration: minutesToDuration(data.duration_minutes),
+    duration_minutes: data.duration_minutes,
     price: data.price,
     currency: data.currency,
     rating: Number(data.rating),
@@ -848,7 +841,7 @@ export async function getSavedPackages(lang = DEFAULT_LANG): Promise<Package[]> 
       } as Guide : undefined,
       area: relName(row.areas),
       area_id: row.area_id,
-      duration: minutesToDuration(row.duration_minutes),
+      duration_minutes: row.duration_minutes,
       price: row.price,
       currency: row.currency,
       rating: Number(row.rating),
@@ -1050,7 +1043,7 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
       guide_id: row.guide_id,
       area: relName(row.areas),
       area_id: row.area_id,
-      duration: minutesToDuration(row.duration_minutes),
+      duration_minutes: row.duration_minutes,
       price: row.price,
       currency: row.currency,
       rating: Number(row.rating),
@@ -1194,7 +1187,7 @@ export async function getCreatorPackageWithSpots(
     guide_id: row.guide_id,
     area: relName(row.areas),
     area_id: row.area_id,
-    duration: minutesToDuration(row.duration_minutes),
+    duration_minutes: row.duration_minutes,
     price: row.price,
     currency: row.currency,
     rating: Number(row.rating),

@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Download, FileJson, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useT } from '@/lib/i18n/provider';
 
 export default function DataDownloadPage() {
+  const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +19,7 @@ export default function DataDownloadPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setError('データを書き出すにはログインが必要です。');
+        setError(t('download.needLogin'));
         setStatus('idle');
         router.push('/login');
         return;
@@ -51,7 +53,7 @@ export default function DataDownloadPage() {
       URL.revokeObjectURL(url);
       setStatus('idle');
     } catch (e) {
-      setError('データの書き出しに失敗しました。時間をおいて再度お試しください。');
+      setError(t('download.failed'));
       setStatus('idle');
       console.error('data download error:', e);
     }
@@ -65,10 +67,10 @@ export default function DataDownloadPage() {
           className="flex items-center gap-1 text-[var(--primary)] mb-4"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">プライバシー設定</span>
+          <span className="text-sm font-medium">{t('privacy.title')}</span>
         </button>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">データをダウンロード</h1>
-        <p className="text-sm text-[var(--text-sub)] mt-1">あなたのデータをまとめて書き出せます</p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)]">{t('download.title')}</h1>
+        <p className="text-sm text-[var(--text-sub)] mt-1">{t('download.desc')}</p>
       </header>
 
       <div className="px-5 space-y-6 pb-8">
@@ -78,12 +80,12 @@ export default function DataDownloadPage() {
               <FileJson className="w-5 h-5 text-[var(--primary)]" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-[var(--text-main)]">JSON 形式</p>
-              <p className="text-xs text-[var(--muted)]">プロフィール・計画・保存・購入履歴</p>
+              <p className="text-sm font-semibold text-[var(--text-main)]">{t('download.format')}</p>
+              <p className="text-xs text-[var(--muted)]">{t('download.contents')}</p>
             </div>
           </div>
           <p className="text-sm text-[var(--text-sub)] leading-relaxed">
-            ボタンを押すと、あなたのアカウントに紐づくデータを 1 つのファイルにまとめて端末にダウンロードします。
+            {t('download.note')}
           </p>
         </div>
 
@@ -101,18 +103,18 @@ export default function DataDownloadPage() {
           {status === 'loading' ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              準備中...
+              {t('download.preparing')}
             </>
           ) : (
             <>
               <Download className="w-5 h-5" />
-              データをダウンロード
+              {t('download.title')}
             </>
           )}
         </button>
 
         <p className="text-xs text-[var(--muted)] text-center px-4 leading-relaxed">
-          ダウンロードしたファイルには個人情報が含まれます。取り扱いにご注意ください。
+          {t('download.caution')}
         </p>
       </div>
     </div>

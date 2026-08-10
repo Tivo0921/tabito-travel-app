@@ -8,8 +8,10 @@ import { MannerTipBox } from '@/components/manner-tip-box';
 import { CTAButton } from '@/components/cta-button';
 import { getMannerTipById } from '@/lib/supabase/queries';
 import type { MannerTip } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 export default function MannerTipDetailPage({ params }: { params: Promise<{ tipId: string }> }) {
+  const t = useT();
   const { tipId } = use(params);
   const router = useRouter();
   const [tip, setTip] = useState<MannerTip | null>(null);
@@ -22,7 +24,7 @@ export default function MannerTipDetailPage({ params }: { params: Promise<{ tipI
   if (!tip) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -45,7 +47,7 @@ export default function MannerTipDetailPage({ params }: { params: Promise<{ tipI
             <ArrowLeft className="w-5 h-5 text-[var(--text-main)]" />
           </button>
           <h1 className="text-lg font-semibold text-[var(--text-main)]">
-            マナーtips
+            {t('mannerTip.label')}
           </h1>
         </div>
       </header>
@@ -89,12 +91,12 @@ export default function MannerTipDetailPage({ params }: { params: Promise<{ tipI
             {isAdded ? (
               <>
                 <Check className="w-5 h-5" />
-                計画に追加済み
+                {t('mannerTip.added')}
               </>
             ) : (
               <>
                 <Plus className="w-5 h-5" />
-                計画に追加する
+                {t('mannerTip.add')}
               </>
             )}
           </CTAButton>

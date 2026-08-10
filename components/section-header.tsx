@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
+import { useT } from '@/lib/i18n/provider';
 
 interface SectionHeaderProps {
   title: string;
@@ -8,7 +11,8 @@ interface SectionHeaderProps {
   actionLabel?: string;
 }
 
-export function SectionHeader({ title, subtitle, href, actionLabel = 'もっと見る' }: SectionHeaderProps) {
+export function SectionHeader({ title, subtitle, href, actionLabel }: SectionHeaderProps) {
+  const t = useT();
   return (
     <div className="flex items-end justify-between mb-4">
       <div>
@@ -22,7 +26,7 @@ export function SectionHeader({ title, subtitle, href, actionLabel = 'もっと�
           href={href}
           className="flex items-center gap-0.5 text-sm font-medium text-[var(--primary)] hover:underline"
         >
-          {actionLabel}
+          {actionLabel ?? t('common.seeMore')}
           <ChevronRight className="w-4 h-4" />
         </Link>
       )}

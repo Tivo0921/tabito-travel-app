@@ -56,7 +56,7 @@ export function SideNav() {
   return (
     <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-[var(--border)] bg-white">
       <div className="px-6 py-6">
-        <Link href="/home" aria-label="TABITO ホーム">
+        <Link href="/home" aria-label={t('nav.homeAria')}>
           <Logo size="sm" priority />
         </Link>
       </div>

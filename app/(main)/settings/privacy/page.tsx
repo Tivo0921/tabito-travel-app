@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Shield, Lock, Eye, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { useT } from '@/lib/i18n/provider';
 
 interface ToggleProps {
   enabled: boolean;
@@ -31,6 +32,7 @@ function Toggle({ enabled, onChange }: ToggleProps) {
 }
 
 export default function PrivacySettingsPage() {
+  const t = useT();
   const router = useRouter();
   const [analytics, setAnalytics] = useState(true);
   const [personalized, setPersonalized] = useState(true);
@@ -43,25 +45,25 @@ export default function PrivacySettingsPage() {
           className="flex items-center gap-1 text-[var(--primary)] mb-4"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">設定</span>
+          <span className="text-sm font-medium">{t('common.settings')}</span>
         </button>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">プライバシー設定</h1>
-        <p className="text-sm text-[var(--text-sub)] mt-1">データの利用方法を管理します</p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)]">{t('privacy.title')}</h1>
+        <p className="text-sm text-[var(--text-sub)] mt-1">{t('privacy.desc')}</p>
       </header>
 
       <div className="px-5 space-y-6 pb-8">
         {/* Data usage */}
         <section>
           <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-2 px-1">
-            データ利用
+            {t('privacy.group.usage')}
           </p>
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="flex items-center gap-4 px-4 py-4 border-b border-[var(--border)]">
               <Eye className="w-5 h-5 text-[var(--muted)] flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--text-main)]">利用状況の分析</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">{t('privacy.analytics')}</p>
                 <p className="text-xs text-[var(--muted)] mt-0.5">
-                  アプリ改善のため匿名の利用データを収集します
+                  {t('privacy.analyticsDesc')}
                 </p>
               </div>
               <Toggle enabled={analytics} onChange={setAnalytics} />
@@ -69,9 +71,9 @@ export default function PrivacySettingsPage() {
             <div className="flex items-center gap-4 px-4 py-4">
               <Shield className="w-5 h-5 text-[var(--muted)] flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--text-main)]">パーソナライズ</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">{t('privacy.personalize')}</p>
                 <p className="text-xs text-[var(--muted)] mt-0.5">
-                  興味・関心に合わせたコンテンツを表示します
+                  {t('privacy.personalizeDesc')}
                 </p>
               </div>
               <Toggle enabled={personalized} onChange={setPersonalized} />
@@ -82,7 +84,7 @@ export default function PrivacySettingsPage() {
         {/* Data management */}
         <section>
           <p className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider mb-2 px-1">
-            データ管理
+            {t('privacy.group.manage')}
           </p>
           <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <Link
@@ -91,8 +93,8 @@ export default function PrivacySettingsPage() {
             >
               <Download className="w-5 h-5 text-[var(--muted)]" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-[var(--text-main)]">データをダウンロード</p>
-                <p className="text-xs text-[var(--muted)] mt-0.5">あなたのデータを書き出せます</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">{t('privacy.download')}</p>
+                <p className="text-xs text-[var(--muted)] mt-0.5">{t('privacy.downloadDesc')}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-[var(--muted)]" />
             </Link>
@@ -102,7 +104,7 @@ export default function PrivacySettingsPage() {
             >
               <Lock className="w-5 h-5 text-[var(--muted)]" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-[var(--text-main)]">プライバシーポリシー</p>
+                <p className="text-sm font-medium text-[var(--text-main)]">{t('privacy.policy')}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-[var(--muted)]" />
             </Link>
@@ -111,7 +113,7 @@ export default function PrivacySettingsPage() {
 
         <div className="p-4 bg-[var(--primary-soft)] rounded-2xl">
           <p className="text-xs text-[var(--text-sub)] leading-relaxed">
-            TABITOはあなたのプライバシーを大切にします。収集するデータはサービス改善のみに使用し、第三者に販売することはありません。
+            {t('privacy.note')}
           </p>
         </div>
       </div>

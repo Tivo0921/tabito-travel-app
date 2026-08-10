@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Clock, BookOpen } from 'lucide-react';
 import { getMagazineArticleById } from '@/lib/supabase/queries';
 import type { MagazineArticle } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 type ArticleWithContent = MagazineArticle & { content: string };
 
@@ -32,6 +33,7 @@ function renderContent(content: string) {
 }
 
 export default function MagazineArticlePage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useT();
   const { id } = use(params);
   const router = useRouter();
   const [article, setArticle] = useState<ArticleWithContent | null>(null);
@@ -47,7 +49,7 @@ export default function MagazineArticlePage({ params }: { params: Promise<{ id: 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -55,12 +57,12 @@ export default function MagazineArticlePage({ params }: { params: Promise<{ id: 
   if (!article) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-[var(--muted)]">記事が見つかりません</p>
+        <p className="text-[var(--muted)]">{t('magazine.notFound')}</p>
         <button
           onClick={() => router.push('/home')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
         >
-          ホームへ
+          {t('common.goHome')}
         </button>
       </div>
     );
@@ -93,11 +95,11 @@ export default function MagazineArticlePage({ params }: { params: Promise<{ id: 
           <div className="flex items-center gap-4 mb-4 text-sm text-[var(--text-sub)]">
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              {article.read_time}分で読める
+              {t('common.readTime', { count: article.read_time })}
             </span>
             <span className="flex items-center gap-1">
               <BookOpen className="w-4 h-4" />
-              マガジン
+              {t('magazine.label')}
             </span>
           </div>
 

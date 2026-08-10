@@ -1,5 +1,8 @@
+'use client';
+
 import { Info, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n/provider';
 
 interface MannerTipBoxProps {
   title?: string;
@@ -8,27 +11,28 @@ interface MannerTipBoxProps {
 }
 
 export function MannerTipBox({ title, tips, variant = 'info' }: MannerTipBoxProps) {
+  const t = useT();
   const variants = {
     info: {
       bg: 'bg-[var(--accent)]/20',
       border: 'border-[var(--accent)]',
       icon: Info,
       iconColor: 'text-[var(--accent)]',
-      title: title || 'マナーtips',
+      title: title || t('mannerTip.label'),
     },
     do: {
       bg: 'bg-green-50',
       border: 'border-green-200',
       icon: Check,
       iconColor: 'text-green-600',
-      title: title || 'こうしましょう',
+      title: title || t('mannerTip.do'),
     },
     dont: {
       bg: 'bg-red-50',
       border: 'border-red-200',
       icon: X,
       iconColor: 'text-red-500',
-      title: title || 'これは避けましょう',
+      title: title || t('mannerTip.dont'),
     },
   };
 

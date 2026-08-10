@@ -12,87 +12,62 @@ import {
   Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n/provider';
+import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 
-const faqs = [
-  {
-    id: '1',
-    category: 'ガイド・パッケージ',
-    q: 'ガイドパッケージとは何ですか？',
-    a: 'ガイドパッケージは、現地在住の日本通クリエイターが作成した旅行ガイドです。観光スポット、グルメ、移動手段など、テーマ別にまとめたコースを購入・利用できます。',
-  },
-  {
-    id: '2',
-    category: 'ガイド・パッケージ',
-    q: '購入したガイドはどこで確認できますか？',
-    a: 'プロフィール画面の「保存済み」タブから購入済みのガイドを確認できます。また、各ガイド詳細ページからも直接アクセスできます。',
-  },
-  {
-    id: '3',
-    category: '支払い',
-    q: '支払い方法は何が使えますか？',
-    a: 'クレジットカード（Visa、Mastercard、American Express）およびApple Pay・Google Payに対応しています。支払いはStripeによる安全な決済で処理されます。',
-  },
-  {
-    id: '4',
-    category: '支払い',
-    q: '返金はできますか？',
-    a: 'デジタルコンテンツの性質上、原則として購入後の返金はお受けできません。ただし、コンテンツに重大な問題がある場合はサポートまでご連絡ください。',
-  },
-  {
-    id: '5',
-    category: 'アカウント',
-    q: 'ログインできません',
-    a: 'メールアドレスとパスワードをご確認ください。Googleアカウントでのログインも可能です。「パスワードを忘れた」からリセットもできます。それでも解決しない場合はサポートへお問い合わせください。',
-  },
-  {
-    id: '6',
-    category: 'アカウント',
-    q: 'アカウントを削除したい',
-    a: 'プロフィール → 設定 → アカウント削除から手続きできます。削除後、データの復元はできませんのでご注意ください。',
-  },
-  {
-    id: '7',
-    category: 'クリエイター',
-    q: 'クリエイターになるには？',
-    a: 'プロフィール画面から「ガイド・クリエイター管理」に進み、クリエイター登録を申請できます。審査後、ガイドパッケージの作成・販売が可能になります。',
-  },
-  {
-    id: '8',
-    category: 'マナーガイド',
-    q: 'マナーガイドは無料ですか？',
-    a: 'はい、マナーガイドはすべて無料でご利用いただけます。日本旅行に役立つエチケット情報をシーン別に提供しています。',
-  },
+type FaqCategory = 'package' | 'payment' | 'account' | 'creator' | 'manner';
+
+const FAQS: { id: string; category: FaqCategory; qKey: TranslationKey; aKey: TranslationKey }[] = [
+  { id: '1', category: 'package', qKey: 'help.q.whatIsPackage', aKey: 'help.a.whatIsPackage' },
+  { id: '2', category: 'package', qKey: 'help.q.wherePurchased', aKey: 'help.a.wherePurchased' },
+  { id: '3', category: 'payment', qKey: 'help.q.paymentMethods', aKey: 'help.a.paymentMethods' },
+  { id: '4', category: 'payment', qKey: 'help.q.refund', aKey: 'help.a.refund' },
+  { id: '5', category: 'account', qKey: 'help.q.cannotLogin', aKey: 'help.a.cannotLogin' },
+  { id: '6', category: 'account', qKey: 'help.q.deleteAccount', aKey: 'help.a.deleteAccount' },
+  { id: '7', category: 'creator', qKey: 'help.q.becomeCreator', aKey: 'help.a.becomeCreator' },
+  { id: '8', category: 'manner', qKey: 'help.q.mannerFree', aKey: 'help.a.mannerFree' },
 ];
 
-const categories = ['すべて', 'ガイド・パッケージ', '支払い', 'アカウント', 'クリエイター', 'マナーガイド'];
+const CATEGORY_LABEL: Record<FaqCategory, TranslationKey> = {
+  package: 'help.category.package',
+  payment: 'help.category.payment',
+  account: 'help.category.account',
+  creator: 'help.category.creator',
+  manner: 'help.category.manner',
+};
+
+const CATEGORY_FILTERS: (FaqCategory | 'all')[] = ['all', 'package', 'payment', 'account', 'creator', 'manner'];
 
 export default function HelpPage() {
   const router = useRouter();
+  const t = useT();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState('すべて');
+  const [activeCategory, setActiveCategory] = useState<FaqCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filtered = faqs.filter((faq) => {
-    const matchCat = activeCategory === 'すべて' || faq.category === activeCategory;
+  // 検索は表示中の言語の文言に対して行う
+  const filtered = FAQS.filter((faq) => {
+    const matchCat = activeCategory === 'all' || faq.category === activeCategory;
+    const q = searchQuery.trim().toLowerCase();
     const matchSearch =
-      searchQuery === '' ||
-      faq.q.includes(searchQuery) ||
-      faq.a.includes(searchQuery);
+      q === '' ||
+      t(faq.qKey).toLowerCase().includes(q) ||
+      t(faq.aKey).toLowerCase().includes(q);
     return matchCat && matchSearch;
   });
 
   return (
-    <div className="pt-[env(safe-area-inset-top)]">
-      <header className="px-5 pt-6 pb-4">
+    <div className="pt-[env(safe-area-inset-top)] lg:max-w-3xl">
+      <header className="px-5 pt-6 pb-4 lg:pt-10">
         <button
           onClick={() => router.back()}
           className="flex items-center gap-1 text-[var(--primary)] mb-4"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">戻る</span>
+          <span className="text-sm font-medium">{t('common.back')}</span>
         </button>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">ヘルプ</h1>
-        <p className="text-sm text-[var(--text-sub)] mt-1">よくある質問とサポート情報</p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)] lg:text-3xl">{t('help.title')}</h1>
+        <p className="text-sm text-[var(--text-sub)] mt-1">{t('help.subtitle')}</p>
       </header>
 
       {/* Search */}
@@ -103,7 +78,7 @@ export default function HelpPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="質問を検索..."
+            placeholder={t('help.searchPlaceholder')}
             className="w-full pl-11 pr-4 py-3 bg-white border border-[var(--border)] rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
           />
         </div>
@@ -112,7 +87,7 @@ export default function HelpPage() {
       {/* Category chips */}
       <div className="px-5 mb-5">
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-          {categories.map((cat) => (
+          {CATEGORY_FILTERS.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
@@ -123,7 +98,7 @@ export default function HelpPage() {
                   : 'bg-white text-[var(--text-sub)] border border-[var(--border)]'
               )}
             >
-              {cat}
+              {cat === 'all' ? t('help.category.all') : t(CATEGORY_LABEL[cat])}
             </button>
           ))}
         </div>
@@ -135,8 +110,8 @@ export default function HelpPage() {
           {filtered.length === 0 ? (
             <div className="text-center py-12">
               <BookOpen className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />
-              <p className="text-[var(--text-main)] font-medium">該当する質問がありません</p>
-              <p className="text-sm text-[var(--text-sub)] mt-1">別のキーワードで検索してみてください</p>
+              <p className="text-[var(--text-main)] font-medium">{t('help.empty.title')}</p>
+              <p className="text-sm text-[var(--text-sub)] mt-1">{t('help.empty.desc')}</p>
             </div>
           ) : (
             filtered.map((faq) => (
@@ -147,9 +122,9 @@ export default function HelpPage() {
                 >
                   <div className="flex-1">
                     <span className="inline-block text-xs font-medium text-[var(--primary)] bg-[var(--primary-soft)] px-2 py-0.5 rounded-full mb-1.5">
-                      {faq.category}
+                      {t(CATEGORY_LABEL[faq.category])}
                     </span>
-                    <p className="text-sm font-medium text-[var(--text-main)]">{faq.q}</p>
+                    <p className="text-sm font-medium text-[var(--text-main)]">{t(faq.qKey)}</p>
                   </div>
                   {openId === faq.id ? (
                     <ChevronUp className="w-5 h-5 text-[var(--muted)] flex-shrink-0 mt-0.5" />
@@ -159,7 +134,7 @@ export default function HelpPage() {
                 </button>
                 {openId === faq.id && (
                   <div className="px-4 pb-4 border-t border-[var(--border)]">
-                    <p className="text-sm text-[var(--text-sub)] mt-3 leading-relaxed">{faq.a}</p>
+                    <p className="text-sm text-[var(--text-sub)] mt-3 leading-relaxed">{t(faq.aKey)}</p>
                   </div>
                 )}
               </div>
@@ -171,22 +146,22 @@ export default function HelpPage() {
       {/* Contact support */}
       <div className="px-5 pb-8">
         <div className="p-5 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-3xl">
-          <h3 className="font-bold text-[var(--text-main)] mb-1">解決しない場合は</h3>
-          <p className="text-sm text-[var(--text-sub)] mb-4">サポートチームに直接お問い合わせください</p>
+          <h3 className="font-bold text-[var(--text-main)] mb-1">{t('help.contact.title')}</h3>
+          <p className="text-sm text-[var(--text-sub)] mb-4">{t('help.contact.desc')}</p>
           <div className="flex gap-3">
             <a
               href="mailto:support@tabito.site"
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-white rounded-2xl text-sm font-medium text-[var(--text-main)] hover:bg-gray-50 transition-colors"
             >
               <Mail className="w-4 h-4 text-[var(--primary)]" />
-              メール
+              {t('help.contact.email')}
             </a>
             <a
               href="https://tabito.site/chat"
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-[var(--primary)] rounded-2xl text-sm font-medium text-white hover:bg-[var(--primary)]/90 transition-colors"
             >
               <MessageCircle className="w-4 h-4" />
-              チャット
+              {t('help.contact.chat')}
             </a>
           </div>
         </div>
