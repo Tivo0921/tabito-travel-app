@@ -96,7 +96,8 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       setPrice(String(p.price));
       setCategoryId(p.category_id ?? '');
       setImageUrl(p.image_url);
-      setDurationHours(p.duration ? String(Math.round(parseInt(p.duration) / 60) || '') : '');
+      // 分をそのまま持つので、表示用文字列を parseInt する必要がない
+      setDurationHours(p.duration_minutes ? String(p.duration_minutes / 60) : '');
       setStatus(p.status as 'draft' | 'published');
       setInfoSaved(true);
     }
@@ -411,7 +412,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-[var(--text-main)] truncate">{spot.name}</p>
                       <p className="text-xs text-[var(--muted)] flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />{t('spot.minutes', { min: spot.duration_minutes ?? 0 })}
+                        <Clock className="w-3 h-3" />{t('spot.minutes', { count: spot.duration_minutes ?? 0 })}
                       </p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_JP } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { LocaleProvider } from '@/lib/i18n/provider'
-import { getLocaleFromCookie } from '@/lib/i18n/server'
+import { resolveLocale } from '@/lib/i18n/server'
 import { ja } from '@/lib/i18n/dictionaries/ja'
 import { en } from '@/lib/i18n/dictionaries/en'
 import { ko } from '@/lib/i18n/dictionaries/ko'
@@ -16,7 +16,7 @@ const notoSansJP = Noto_Sans_JP({
 
 // メタデータも Cookie の言語に合わせる（検索結果やSNSシェアで正しい言語が出る）
 export async function generateMetadata(): Promise<Metadata> {
-  const locale = await getLocaleFromCookie()
+  const locale = await resolveLocale()
   const dict = { ja, en, ko }[locale]
   const title = dict['meta.title']
   const description = dict['meta.description']
@@ -58,7 +58,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const locale = await getLocaleFromCookie()
+  const locale = await resolveLocale()
   const dict = { ja, en, ko }[locale]
 
   return (

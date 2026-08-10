@@ -29,7 +29,8 @@ import {
   unsavePackage,
   hasPurchased,
 } from '@/lib/supabase/queries';
-import { useT } from '@/lib/i18n/provider';
+import { useT, useLocale } from '@/lib/i18n/provider';
+import { formatDuration, formatPrice } from '@/lib/i18n/format';
 import type { Package, Spot, Review } from '@/lib/types';
 
 type TabType = 'about' | 'manner' | 'review';
@@ -38,6 +39,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const t = useT();
+  const { locale } = useLocale();
   const [activeTab, setActiveTab] = useState<TabType>('about');
   const [isSaved, setIsSaved] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
@@ -211,7 +213,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
             </span>
             <span className="flex items-center gap-1 text-[var(--text-sub)]">
               <Clock className="w-4 h-4" />
-              {pkg.duration}
+              {formatDuration(pkg.duration_minutes, t)}
             </span>
             <span className="flex items-center gap-1">
               <Star className="w-4 h-4 fill-[var(--primary)] text-[var(--primary)]" />
@@ -385,7 +387,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
           <div className="flex-shrink-0 whitespace-nowrap">
             <p className="text-sm text-[var(--text-sub)]">{t('package.price')}</p>
             <p className="text-xl font-bold text-[var(--primary)]">
-              {t('common.priceYen', { price: pkg.price.toLocaleString() })}
+              {formatPrice(pkg.price, locale, t)}
             </p>
           </div>
           {isPurchased ? (
@@ -419,7 +421,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
               <div className="flex items-center justify-between">
                 <span className="text-[var(--text-sub)]">{t('package.modal.price')}</span>
                 <span className="text-xl font-bold text-[var(--primary)]">
-                  {t('common.priceYen', { price: pkg.price.toLocaleString() })}
+                  {formatPrice(pkg.price, locale, t)}
                 </span>
               </div>
             </div>

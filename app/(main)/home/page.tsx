@@ -122,7 +122,7 @@ export default function HomePage() {
                 {article.title}
               </h3>
               <p className="text-sm text-[var(--text-sub)]">
-                {t('common.readTime', { min: article.read_time })}
+                {t('common.readTime', { count: article.read_time })}
               </p>
             </Link>
           ))}

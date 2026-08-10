@@ -132,7 +132,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               {currentSpot.name}
             </h1>
             <p className="text-sm text-[var(--text-sub)]">
-              {t('guide.duration', { min: currentSpot.duration_minutes ?? 0 })}
+              {t('guide.duration', { count: currentSpot.duration_minutes ?? 0 })}
             </p>
           </div>
         </div>

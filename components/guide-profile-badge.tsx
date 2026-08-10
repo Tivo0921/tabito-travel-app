@@ -1,3 +1,5 @@
+'use client';
+
 import Image from 'next/image';
 import { Star, MapPin } from 'lucide-react';
 import type { Guide } from '@/lib/types';

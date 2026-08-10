@@ -95,7 +95,7 @@ export default function MagazineArticlePage({ params }: { params: Promise<{ id: 
           <div className="flex items-center gap-4 mb-4 text-sm text-[var(--text-sub)]">
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              {t('common.readTime', { min: article.read_time })}
+              {t('common.readTime', { count: article.read_time })}
             </span>
             <span className="flex items-center gap-1">
               <BookOpen className="w-4 h-4" />
