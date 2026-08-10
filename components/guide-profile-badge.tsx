@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import { Star, MapPin } from 'lucide-react';
 import type { Guide } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 interface GuideProfileBadgeProps {
   guide: Guide;
@@ -8,6 +9,7 @@ interface GuideProfileBadgeProps {
 }
 
 export function GuideProfileBadge({ guide, variant = 'default' }: GuideProfileBadgeProps) {
+  const t = useT();
   if (variant === 'compact') {
     return (
       <div className="flex items-center gap-2">
@@ -21,7 +23,7 @@ export function GuideProfileBadge({ guide, variant = 'default' }: GuideProfileBa
         </div>
         <div>
           <p className="text-sm font-medium text-[var(--text-main)]">{guide.name}</p>
-          <p className="text-xs text-[var(--text-sub)]">{guide.location}ガイド</p>
+          <p className="text-xs text-[var(--text-sub)]">{t('guideBadge.location', { location: guide.location })}</p>
         </div>
       </div>
     );

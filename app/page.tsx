@@ -6,48 +6,25 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
 import { Logo, LogoMark } from '@/components/logo';
+import { useT } from '@/lib/i18n/provider';
+import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 
-const onboardingSlides = [
-  {
-    title: '日本をもっと深く',
-    subtitle: 'Travel Japan, Deeper',
-    description: '表面的な観光を超え、本物の日本に出会いましょう。現地に住む先輩たちが教える隠れたストーリー。',
-    gradient: 'from-[var(--primary-soft)] to-white',
-  },
-  {
-    title: '出発前に、日本を理解しよう',
-    subtitle: 'Before You Arrive',
-    description: '旅行前のチュートリアル動画で、日本の文化とマナーを事前に学んで出発しましょう。',
-    gradient: 'from-[var(--accent)]/30 to-white',
-  },
-  {
-    title: '場面の中でマナーを学ぼう',
-    subtitle: 'Learn in Context',
-    description: '各スポットで必要なマナーと日本語表現をその場でお伝えします。',
-    gradient: 'from-[var(--primary-soft)] to-white',
-  },
-  {
-    title: '観光地を超えて',
-    subtitle: 'Beyond Tourism',
-    description: '地元の人だけが知る隠れスポット、ローカルグルメ、本物の日本の日常を体験しよう。',
-    gradient: 'from-[var(--accent)]/30 to-white',
-  },
-  {
-    title: '旅を始めよう',
-    subtitle: 'Start Your Journey',
-    description: 'TABITOと一緒に特別な日本旅行を始めましょう。',
-    gradient: 'from-[var(--primary-soft)] to-[var(--accent)]/20',
-    isLast: true,
-  },
-];
+const ONBOARDING_SLIDES = [
+  { titleKey: 'onboarding.slide1.title', descKey: 'onboarding.slide1.desc', subtitle: 'Travel Japan, Deeper', gradient: 'from-[var(--primary-soft)] to-white' },
+  { titleKey: 'onboarding.slide2.title', descKey: 'onboarding.slide2.desc', subtitle: 'Before You Arrive', gradient: 'from-[var(--accent)]/30 to-white' },
+  { titleKey: 'onboarding.slide3.title', descKey: 'onboarding.slide3.desc', subtitle: 'Learn in Context', gradient: 'from-[var(--primary-soft)] to-white' },
+  { titleKey: 'onboarding.slide4.title', descKey: 'onboarding.slide4.desc', subtitle: 'Beyond Tourism', gradient: 'from-[var(--accent)]/30 to-white' },
+  { titleKey: 'onboarding.slide5.title', descKey: 'onboarding.slide5.desc', subtitle: 'Start Your Journey', gradient: 'from-[var(--primary-soft)] to-[var(--accent)]/20', isLast: true },
+] satisfies { titleKey: TranslationKey; descKey: TranslationKey; subtitle: string; gradient: string; isLast?: boolean }[];
 
 export default function OnboardingPage() {
+  const t = useT();
   const [currentSlide, setCurrentSlide] = useState(0);
   const router = useRouter();
-  const slide = onboardingSlides[currentSlide];
+  const slide = ONBOARDING_SLIDES[currentSlide];
 
   const nextSlide = () => {
-    if (currentSlide < onboardingSlides.length - 1) {
+    if (currentSlide < ONBOARDING_SLIDES.length - 1) {
       setCurrentSlide(currentSlide + 1);
     }
   };
@@ -89,7 +66,7 @@ export default function OnboardingPage() {
             onClick={() => router.push('/home')}
             className="text-sm text-[var(--text-sub)] hover:text-[var(--text-main)] transition-colors"
           >
-            スキップ
+            {t('onboarding.skip')}
           </button>
         )}
         {slide.isLast && <div className="w-16" />}
@@ -117,10 +94,10 @@ export default function OnboardingPage() {
             {slide.subtitle}
           </p>
           <h1 className="text-3xl font-bold text-[var(--text-main)] mb-4 text-balance">
-            {slide.title}
+            {t(slide.titleKey)}
           </h1>
           <p className="text-[var(--text-sub)] leading-relaxed text-pretty">
-            {slide.description}
+            {t(slide.descKey)}
           </p>
         </div>
       </main>
@@ -129,7 +106,7 @@ export default function OnboardingPage() {
       <footer className="p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
         {/* Progress Dots */}
         <div className="flex items-center justify-center gap-2 mb-6">
-          {onboardingSlides.map((_, index) => (
+          {ONBOARDING_SLIDES.map((_, index) => (
             <button
               key={index}
               onClick={() => setCurrentSlide(index)}
@@ -147,18 +124,18 @@ export default function OnboardingPage() {
         {slide.isLast ? (
           <div className="space-y-3">
             <CTAButton onClick={handleGetStarted} fullWidth size="lg">
-              はじめる
+              {t('onboarding.start')}
             </CTAButton>
             <button
               onClick={handleLogin}
               className="w-full text-center text-sm text-[var(--text-sub)] hover:text-[var(--primary)] transition-colors py-2"
             >
-              すでにアカウントをお持ちですか？ <span className="font-semibold">ログイン</span>
+              {t('onboarding.hasAccount')} <span className="font-semibold">{t('onboarding.login')}</span>
             </button>
           </div>
         ) : (
           <CTAButton onClick={nextSlide} fullWidth size="lg">
-            次へ
+            {t('onboarding.next')}
             <ChevronRight className="w-5 h-5" />
           </CTAButton>
         )}

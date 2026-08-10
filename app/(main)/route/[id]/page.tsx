@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Heart, User, MapPin } from 'lucide-react';
 import { getCommunityRouteById } from '@/lib/supabase/queries';
 import type { CommunityRoute } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 export default function CommunityRoutePage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useT();
   const { id } = use(params);
   const router = useRouter();
   const [route, setRoute] = useState<CommunityRoute | null>(null);
@@ -23,7 +25,7 @@ export default function CommunityRoutePage({ params }: { params: Promise<{ id: s
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -31,12 +33,12 @@ export default function CommunityRoutePage({ params }: { params: Promise<{ id: s
   if (!route) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-[var(--muted)]">ルートが見つかりません</p>
+        <p className="text-[var(--muted)]">{t('route.notFound')}</p>
         <button
           onClick={() => router.push('/home')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
         >
-          ホームへ
+          {t('common.goHome')}
         </button>
       </div>
     );
@@ -90,9 +92,9 @@ export default function CommunityRoutePage({ params }: { params: Promise<{ id: s
           {/* Coming soon placeholder */}
           <div className="p-5 bg-[var(--primary-soft)]/30 rounded-2xl flex flex-col items-center gap-3 text-center">
             <MapPin className="w-8 h-8 text-[var(--primary)]" />
-            <p className="font-semibold text-[var(--text-main)]">スポット詳細は近日公開</p>
+            <p className="font-semibold text-[var(--text-main)]">{t('route.comingSoon')}</p>
             <p className="text-sm text-[var(--text-sub)]">
-              コミュニティメンバーがシェアしたスポット情報を順次追加予定です。
+              {t('route.comingSoonDesc')}
             </p>
           </div>
         </div>

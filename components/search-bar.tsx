@@ -3,18 +3,21 @@
 import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n/provider';
 
 interface SearchBarProps {
+  /** 未指定なら汎用の文言を使う */
   placeholder?: string;
   onSearch?: (query: string) => void;
   className?: string;
 }
 
-export function SearchBar({ 
-  placeholder = '検索キーワードを入力',
+export function SearchBar({
+  placeholder,
   onSearch,
   className 
 }: SearchBarProps) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
 
@@ -38,7 +41,7 @@ export function SearchBar({
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t('search.placeholder')}
           className="flex-1 bg-transparent text-[var(--text-main)] placeholder:text-[var(--muted)] focus:outline-none text-base"
         />
       </div>

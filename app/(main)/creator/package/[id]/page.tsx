@@ -31,6 +31,7 @@ import {
   getCategories,
 } from '@/lib/supabase/queries';
 import type { Spot, CreatorSpotInput, Area, Category } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 const EMPTY_SPOT: CreatorSpotInput = {
   name: '',
@@ -49,6 +50,7 @@ const EMPTY_SPOT: CreatorSpotInput = {
 };
 
 export default function CreatorPackagePage({ params }: { params: Promise<{ id: string }> }) {
+  const t = useT();
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -189,7 +191,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   };
 
   const handleDeleteSpot = async (spotId: string) => {
-    if (!packageId || !confirm('このスポットを削除しますか？')) return;
+    if (!packageId || !confirm(t('pkgEdit.confirmDeleteSpot'))) return;
     await deleteCreatorSpot(spotId, packageId);
     setSpots((prev) => prev.filter((s) => s.id !== spotId));
   };
@@ -227,7 +229,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -241,14 +243,14 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             <ArrowLeft className="w-5 h-5 text-[var(--text-main)]" />
           </button>
           <h1 className="flex-1 font-bold text-[var(--text-main)] truncate">
-            {isNew ? '新しいパッケージ' : (title || 'パッケージ編集')}
+            {isNew ? t('pkgEdit.newTitle') : (title || t('pkgEdit.editTitle'))}
           </h1>
           {packageId && (
             <span className={cn(
               'px-2.5 py-1 rounded-full text-xs font-medium',
               status === 'published' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
             )}>
-              {status === 'published' ? '公開中' : '下書き'}
+              {status === 'published' ? t('creator.status.published') : t('creator.status.draft')}
             </span>
           )}
         </div>
@@ -258,43 +260,43 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
         {/* ── 基本情報セクション ── */}
         <section className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
-            <h2 className="font-semibold text-[var(--text-main)]">基本情報</h2>
+            <h2 className="font-semibold text-[var(--text-main)]">{t('pkgEdit.basic')}</h2>
             {infoSaved && <Check className="w-4 h-4 text-green-500" />}
           </div>
           <div className="p-4 space-y-4">
             <div>
-              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">タイトル *</label>
+              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.title')}</label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => { setTitle(e.target.value); setInfoSaved(false); }}
-                placeholder="例：渋谷・原宿ローカルグルメツアー"
+                placeholder={t('pkgEdit.titlePlaceholder')}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">一言説明</label>
+              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.short')}</label>
               <input
                 type="text"
                 value={shortDesc}
                 onChange={(e) => { setShortDesc(e.target.value); setInfoSaved(false); }}
-                placeholder="例：地元だけが知る隠れグルメスポットを巡るコース"
+                placeholder={t('pkgEdit.shortPlaceholder')}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">詳細説明</label>
+              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.desc')}</label>
               <textarea
                 value={description}
                 onChange={(e) => { setDescription(e.target.value); setInfoSaved(false); }}
-                placeholder="このツアーの魅力、特徴、対象者などを詳しく記載してください"
+                placeholder={t('pkgEdit.descPlaceholder')}
                 rows={4}
                 className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">エリア *</label>
+                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.area')}</label>
                 <select
                   value={areaId}
                   onChange={(e) => { setAreaId(e.target.value); setInfoSaved(false); }}
@@ -304,7 +306,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">カテゴリ</label>
+                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.category')}</label>
                 <select
                   value={categoryId}
                   onChange={(e) => { setCategoryId(e.target.value); setInfoSaved(false); }}
@@ -316,7 +318,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">料金 (円) *</label>
+                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.price')}</label>
                 <input
                   type="number"
                   value={price}
@@ -327,7 +329,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">所要時間 (時間)</label>
+                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.duration')}</label>
                 <input
                   type="number"
                   value={durationHours}
@@ -340,7 +342,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">サムネイル画像URL</label>
+              <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.thumbnail')}</label>
               <input
                 type="url"
                 value={imageUrl}
@@ -360,7 +362,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               disabled={!title.trim() || !areaId || !price || savingInfo}
               loading={savingInfo}
             >
-              {infoSaved ? '保存済み ✓' : '基本情報を保存'}
+              {infoSaved ? t('pkgEdit.saved') : t('pkgEdit.saveBasic')}
             </CTAButton>
           </div>
         </section>
@@ -370,20 +372,20 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
           <section className="bg-white rounded-2xl shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
               <h2 className="font-semibold text-[var(--text-main)]">
-                スポット ({spots.length}件)
+                {t('pkgEdit.spots', { count: spots.length })}
               </h2>
               <button
                 onClick={openAddSpot}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--primary-soft)] text-[var(--primary)] rounded-xl text-sm font-medium"
               >
-                <Plus className="w-4 h-4" />追加
+                <Plus className="w-4 h-4" />{t('pkgEdit.addSpot')}
               </button>
             </div>
 
             {spots.length === 0 ? (
               <div className="py-10 text-center">
                 <MapPin className="w-10 h-10 text-[var(--muted)] mx-auto mb-2" />
-                <p className="text-sm text-[var(--muted)]">スポットを追加してください</p>
+                <p className="text-sm text-[var(--muted)]">{t('pkgEdit.spotsEmpty')}</p>
               </div>
             ) : (
               <div className="divide-y divide-[var(--border)]">
@@ -409,7 +411,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-[var(--text-main)] truncate">{spot.name}</p>
                       <p className="text-xs text-[var(--muted)] flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />{spot.duration_minutes}分
+                        <Clock className="w-3 h-3" />{t('spot.minutes', { min: spot.duration_minutes ?? 0 })}
                       </p>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
@@ -417,7 +419,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                         onClick={() => openEditSpot(spot)}
                         className="px-3 py-1.5 text-xs font-medium text-[var(--primary)] border border-[var(--primary)]/30 rounded-lg hover:bg-[var(--primary-soft)] transition-colors"
                       >
-                        編集
+                        {t('pkgEdit.edit')}
                       </button>
                       <button
                         onClick={() => handleDeleteSpot(spot.id)}
@@ -445,13 +447,13 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               variant={status === 'published' ? 'outline' : 'primary'}
             >
               {status === 'published'
-                ? <><EyeOff className="w-5 h-5" />下書きに戻す</>
-                : <><Eye className="w-5 h-5" />公開する</>
+                ? <><EyeOff className="w-5 h-5" />{t('creator.action.unpublish')}</>
+                : <><Eye className="w-5 h-5" />{t('creator.action.publish')}</>
               }
             </CTAButton>
             {status !== 'published' && spots.length === 0 && (
               <p className="text-xs text-[var(--muted)] text-center mt-2">
-                ※ 公開にはスポットが最低1件必要です
+                {t('pkgEdit.publishNote')}
               </p>
             )}
           </div>
@@ -466,7 +468,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             <div className="px-5 pt-5 pb-3 flex-shrink-0 border-b border-[var(--border)]">
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
               <h2 className="text-lg font-bold text-[var(--text-main)]">
-                {editingSpot ? 'スポットを編集' : 'スポットを追加'}
+                {editingSpot ? t('pkgEdit.spotModal.edit') : t('pkgEdit.spotModal.add')}
               </h2>
             </div>
 
@@ -475,21 +477,21 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               {/* 基本情報 */}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">スポット名 *</label>
+                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.spotName')}</label>
                   <input
                     type="text"
                     value={spotInput.name}
                     onChange={(e) => setSpotInput((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="例：道頓堀"
+                    placeholder={t('pkgEdit.spotNamePlaceholder')}
                     className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">説明</label>
+                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.spotDesc')}</label>
                   <textarea
                     value={spotInput.description}
                     onChange={(e) => setSpotInput((p) => ({ ...p, description: e.target.value }))}
-                    placeholder="このスポットの魅力や見どころを説明してください"
+                    placeholder={t('pkgEdit.spotDescPlaceholder')}
                     rows={3}
                     className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
                   />
@@ -501,7 +503,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                 <div>
                   <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5 flex items-center gap-1">
                     <Video className="w-3.5 h-3.5 text-[var(--primary)]" />
-                    ガイド動画URL
+                    {t('pkgEdit.videoUrl')}
                   </label>
                   <input
                     type="url"
@@ -512,7 +514,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">画像URL</label>
+                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.imageUrl')}</label>
                   <input
                     type="url"
                     value={spotInput.image_url}
@@ -526,7 +528,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               {/* 所要時間 & マップ */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">所要時間 (分)</label>
+                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.spotDuration')}</label>
                   <input
                     type="number"
                     value={spotInput.duration_minutes}
@@ -537,7 +539,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">GoogleマップURL</label>
+                  <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.mapUrl')}</label>
                   <input
                     type="url"
                     value={spotInput.map_url}
@@ -551,8 +553,8 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               {/* ローカルtips */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-[var(--text-sub)]">ローカルtips</label>
-                  <button onClick={() => addTip('local_tips')} className="text-xs text-[var(--primary)] font-medium">+ 追加</button>
+                  <label className="text-xs font-medium text-[var(--text-sub)]">{t('pkgEdit.localTips')}</label>
+                  <button onClick={() => addTip('local_tips')} className="text-xs text-[var(--primary)] font-medium">{t('pkgEdit.addRow')}</button>
                 </div>
                 <div className="space-y-2">
                   {spotInput.local_tips.map((tip, i) => (
@@ -571,8 +573,8 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               {/* マナーtips */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-[var(--text-sub)]">マナー・エチケット</label>
-                  <button onClick={() => addTip('etiquette_tips')} className="text-xs text-[var(--primary)] font-medium">+ 追加</button>
+                  <label className="text-xs font-medium text-[var(--text-sub)]">{t('pkgEdit.etiquette')}</label>
+                  <button onClick={() => addTip('etiquette_tips')} className="text-xs text-[var(--primary)] font-medium">{t('pkgEdit.addRow')}</button>
                 </div>
                 <div className="space-y-2">
                   {spotInput.etiquette_tips.map((tip, i) => (
@@ -581,7 +583,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                       type="text"
                       value={tip}
                       onChange={(e) => setTip('etiquette_tips', i, e.target.value)}
-                      placeholder={`マナー ${i + 1}`}
+                      placeholder={t('pkgEdit.etiquettePlaceholder', { n: i + 1 })}
                       className="w-full px-4 py-2.5 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     />
                   ))}
@@ -591,8 +593,8 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
               {/* 日本語フレーズ */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-medium text-[var(--text-sub)]">役立つ日本語フレーズ</label>
-                  <button onClick={addPhrase} className="text-xs text-[var(--primary)] font-medium">+ 追加</button>
+                  <label className="text-xs font-medium text-[var(--text-sub)]">{t('pkgEdit.phrases')}</label>
+                  <button onClick={addPhrase} className="text-xs text-[var(--primary)] font-medium">{t('pkgEdit.addRow')}</button>
                 </div>
                 <div className="space-y-3">
                   {spotInput.phrases.map((phrase, i) => (
@@ -601,21 +603,21 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                         type="text"
                         value={phrase.japanese}
                         onChange={(e) => setPhrase(i, 'japanese', e.target.value)}
-                        placeholder="日本語"
+                        placeholder={t('pkgEdit.phraseJa')}
                         className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                       />
                       <input
                         type="text"
                         value={phrase.reading}
                         onChange={(e) => setPhrase(i, 'reading', e.target.value)}
-                        placeholder="読み方（ひらがな）"
+                        placeholder={t('pkgEdit.phraseReading')}
                         className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                       />
                       <input
                         type="text"
                         value={phrase.meaning}
                         onChange={(e) => setPhrase(i, 'meaning', e.target.value)}
-                        placeholder="意味・使う場面"
+                        placeholder={t('pkgEdit.phraseMeaning')}
                         className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                       />
                     </div>
@@ -631,7 +633,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                   onClick={() => setShowSpotModal(false)}
                   className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium text-sm"
                 >
-                  キャンセル
+                  {t('common.cancel')}
                 </button>
                 <CTAButton
                   onClick={handleSaveSpot}
@@ -639,7 +641,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                   disabled={!spotInput.name.trim() || savingSpot}
                   loading={savingSpot}
                 >
-                  保存する
+                  {t('pkgEdit.save')}
                 </CTAButton>
               </div>
             </div>

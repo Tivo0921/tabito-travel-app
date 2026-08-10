@@ -4,16 +4,17 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useT } from '@/lib/i18n/provider';
 
-const CONFIRM_WORD = '削除';
 
 export default function DeleteAccountPage() {
+  const t = useT();
   const router = useRouter();
   const [confirmText, setConfirmText] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const canDelete = confirmText.trim() === CONFIRM_WORD;
+  const canDelete = confirmText.trim() === t('deleteAccount.confirmWord');
 
   const handleDelete = async () => {
     if (!canDelete) return;
@@ -33,7 +34,7 @@ export default function DeleteAccountPage() {
       await supabase.auth.signOut();
       router.push('/login');
     } catch (e) {
-      setError('アカウントの削除に失敗しました。時間をおいて再度お試しください。');
+      setError(t('deleteAccount.failed'));
       setStatus('idle');
       console.error('delete account error:', e);
     }
@@ -47,31 +48,31 @@ export default function DeleteAccountPage() {
           className="flex items-center gap-1 text-[var(--primary)] mb-4"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">設定</span>
+          <span className="text-sm font-medium">{t('common.settings')}</span>
         </button>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">アカウント削除</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-main)]">{t('deleteAccount.title')}</h1>
       </header>
 
       <div className="px-5 space-y-6 pb-8">
         <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex gap-3">
           <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-red-700 leading-relaxed">
-            <p className="font-semibold mb-1">この操作は取り消せません</p>
+            <p className="font-semibold mb-1">{t('deleteAccount.warning')}</p>
             <p>
-              プロフィール、旅行計画、保存した項目、購入履歴を含むすべてのデータが完全に削除されます。
+              {t('deleteAccount.dataList')}
             </p>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm p-5">
           <p className="text-sm text-[var(--text-sub)] leading-relaxed mb-4">
-            削除を続けるには、下の欄に「<span className="font-bold text-[var(--text-main)]">{CONFIRM_WORD}</span>」と入力してください。
+            {t('deleteAccount.confirmPrefix')}<span className="font-bold text-[var(--text-main)]">{t('deleteAccount.confirmWord')}</span>{t('deleteAccount.confirmSuffix')}
           </p>
           <input
             type="text"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
-            placeholder={CONFIRM_WORD}
+            placeholder={t('deleteAccount.confirmWord')}
             className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm text-[var(--text-main)] focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400"
           />
         </div>
@@ -90,10 +91,10 @@ export default function DeleteAccountPage() {
           {status === 'loading' ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              削除しています...
+              {t('deleteAccount.deleting')}
             </>
           ) : (
-            'アカウントを完全に削除する'
+            t('deleteAccount.submit')
           )}
         </button>
 
@@ -101,7 +102,7 @@ export default function DeleteAccountPage() {
           onClick={() => router.back()}
           className="w-full py-3 text-sm text-[var(--text-sub)] hover:text-[var(--text-main)] transition-colors"
         >
-          キャンセル
+          {t('common.cancel')}
         </button>
       </div>
     </div>

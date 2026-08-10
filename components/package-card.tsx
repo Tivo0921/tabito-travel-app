@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Star, MapPin, Clock, Package as PackageIcon } from 'lucide-react';
 import type { Package } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 interface PackageCardProps {
   package: Package;
@@ -9,6 +10,7 @@ interface PackageCardProps {
 }
 
 export function PackageCard({ package: pkg, variant = 'default' }: PackageCardProps) {
+  const t = useT();
   if (variant === 'compact') {
     return (
       <Link href={`/package/${pkg.id}`} className="block group">
@@ -48,7 +50,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
                 <span className="text-xs text-[var(--muted)]">({pkg.review_count})</span>
               </div>
               <span className="text-sm font-bold text-[var(--primary)]">
-                {pkg.price.toLocaleString()}円
+                {t('common.priceYen', { price: pkg.price.toLocaleString() })}
               </span>
             </div>
           </div>
@@ -111,7 +113,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
               <span className="text-[var(--muted)]">({pkg.review_count})</span>
             </div>
             <span className="text-lg font-bold text-[var(--primary)]">
-              {pkg.price.toLocaleString()}円
+              {t('common.priceYen', { price: pkg.price.toLocaleString() })}
             </span>
           </div>
         </div>

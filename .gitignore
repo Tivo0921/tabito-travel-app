@@ -18,3 +18,6 @@ node_modules
 
 # Build artifacts
 *.tsbuildinfo
+
+# Claude Code のローカル個人設定（許可リスト等）。deployment.md は共有する
+.claude/settings.local.json
