@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n/provider';
 
 interface ToggleProps {
   enabled: boolean;
@@ -30,6 +31,7 @@ function Toggle({ enabled, onChange }: ToggleProps) {
 }
 
 export default function NotificationsSettingsPage() {
+  const t = useT();
   const router = useRouter();
   const [settings, setSettings] = useState({
     newGuide: true,
@@ -44,23 +46,23 @@ export default function NotificationsSettingsPage() {
 
   const groups = [
     {
-      title: 'ガイド・コンテンツ',
+      title: t('notif.group.content'),
       items: [
-        { key: 'newGuide' as const, label: '新着ガイド', desc: 'フォロー中のクリエイターの新しいガイド' },
-        { key: 'tips' as const, label: 'マナーTips', desc: '日本旅行に役立つマナー情報' },
+        { key: 'newGuide' as const, label: t('notif.newGuide'), desc: t('notif.newGuideDesc') },
+        { key: 'tips' as const, label: t('notif.tips'), desc: t('notif.tipsDesc') },
       ],
     },
     {
-      title: '旅行計画',
+      title: t('notif.group.plan'),
       items: [
-        { key: 'planReminder' as const, label: '旅行リマインダー', desc: '出発前日や当日のお知らせ' },
+        { key: 'planReminder' as const, label: t('notif.planReminder'), desc: t('notif.planReminderDesc') },
       ],
     },
     {
-      title: 'その他',
+      title: t('notif.group.other'),
       items: [
-        { key: 'promotion' as const, label: 'キャンペーン・特典', desc: 'お得なプロモーション情報' },
-        { key: 'review' as const, label: 'レビューのお願い', desc: 'ガイドを利用後のフィードバック依頼' },
+        { key: 'promotion' as const, label: t('notif.promotion'), desc: t('notif.promotionDesc') },
+        { key: 'review' as const, label: t('notif.review'), desc: t('notif.reviewDesc') },
       ],
     },
   ];
@@ -73,10 +75,10 @@ export default function NotificationsSettingsPage() {
           className="flex items-center gap-1 text-[var(--primary)] mb-4"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">設定</span>
+          <span className="text-sm font-medium">{t('common.settings')}</span>
         </button>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">通知設定</h1>
-        <p className="text-sm text-[var(--text-sub)] mt-1">受け取る通知の種類を管理します</p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)]">{t('notif.title')}</h1>
+        <p className="text-sm text-[var(--text-sub)] mt-1">{t('notif.desc')}</p>
       </header>
 
       <div className="px-5 space-y-6 pb-8">
@@ -106,7 +108,7 @@ export default function NotificationsSettingsPage() {
         ))}
 
         <p className="text-xs text-[var(--muted)] text-center px-4">
-          端末のシステム設定でもTABITOの通知を管理できます
+          {t('notif.systemNote')}
         </p>
       </div>
     </div>

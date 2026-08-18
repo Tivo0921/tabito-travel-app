@@ -12,13 +12,22 @@ import {
   ChevronUp,
   Check,
   PartyPopper,
+  MessageCircle,
 } from 'lucide-react';
 import { cn, getYouTubeEmbedUrl } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
 import { SpotProgressItem } from '@/components/spot-progress-item';
 import { JapanesePhraseCard } from '@/components/japanese-phrase-card';
 import { MannerTipBox } from '@/components/manner-tip-box';
-import { getPackageById, getSpotsByPackageId } from '@/lib/supabase/queries';
+import {
+  getPackageById,
+  getSpotsByPackageId,
+  getPackageCreatorUserId,
+  getOrCreateChatThread,
+  hasPurchased,
+} from '@/lib/supabase/queries';
+import { createClient } from '@/lib/supabase/client';
+import { useT } from '@/lib/i18n/provider';
 import type { Package, Spot } from '@/lib/types';
 
 export default function GuideExperiencePage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,13 +40,44 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
   const [pkg, setPkg] = useState<Package | null>(null);
   const [spots, setSpots] = useState<Spot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canChat, setCanChat] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
+  const [chatError, setChatError] = useState(false);
+  const t = useT();
 
   useEffect(() => {
     Promise.all([
       getPackageById(id).then(setPkg),
       getSpotsByPackageId(id).then(setSpots),
     ]).finally(() => setLoading(false));
+
+    // チャットを出す条件:
+    //   購入済み・クリエイターにアカウントがある・自分自身でない、の3つすべて。
+    //   購入判定が無いと未購入者にもボタンが見え、押しても
+    //   getOrCreateChatThread が null を返して無反応になる。
+    //   自分が作ったパッケージを自分で買った場合も buyer_id = creator_id となり
+    //   DB制約で弾かれるため出さない。
+    Promise.all([
+      hasPurchased(id),
+      getPackageCreatorUserId(id),
+      createClient().auth.getUser(),
+    ]).then(([purchased, creatorId, { data: { user } }]) => {
+      setCanChat(purchased && !!creatorId && !!user && user.id !== creatorId);
+    });
   }, [id]);
+
+  const handleOpenChat = async () => {
+    setOpeningChat(true);
+    setChatError(false);
+    const thread = await getOrCreateChatThread(id);
+    setOpeningChat(false);
+    if (thread) {
+      router.push(`/chat/${thread.id}`);
+    } else {
+      // 押しても何も起きない状態を作らない
+      setChatError(true);
+    }
+  };
 
   const currentSpot = spots[currentSpotIndex];
   const progress = spots.length > 0 ? ((currentSpotIndex + 1) / spots.length) * 100 : 0;
@@ -45,7 +85,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -53,12 +93,12 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
   if (!pkg || !currentSpot) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-[var(--muted)]">ガイドが見つかりません</p>
+        <p className="text-[var(--muted)]">{t('guide.notFound')}</p>
         <button
           onClick={() => router.push('/home')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
         >
-          ホームへ
+          {t('common.goHome')}
         </button>
       </div>
     );
@@ -98,7 +138,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
           <div className="flex-1 min-w-0">
             <p className="text-sm text-[var(--text-sub)] truncate">{pkg.title}</p>
             <p className="text-xs text-[var(--muted)]">
-              {currentSpotIndex + 1} / {spots.length} スポット
+              {t('guide.spotCount', { current: currentSpotIndex + 1, total: spots.length })}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -128,7 +168,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               {currentSpot.name}
             </h1>
             <p className="text-sm text-[var(--text-sub)]">
-              約{currentSpot.duration_minutes}分かかります
+              {t('guide.duration', { count: currentSpot.duration_minutes ?? 0 })}
             </p>
           </div>
         </div>
@@ -155,7 +195,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               )}
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 gap-2">
                 <Play className="w-10 h-10 text-white/60" />
-                <p className="text-white/60 text-sm">動画は準備中です</p>
+                <p className="text-white/60 text-sm">{t('guide.videoPending')}</p>
               </div>
             </div>
           )}
@@ -163,7 +203,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
 
         {/* Description */}
         <div className="mb-6">
-          <h2 className="font-semibold text-[var(--text-main)] mb-2">現地ガイドの説明</h2>
+          <h2 className="font-semibold text-[var(--text-main)] mb-2">{t('guide.description')}</h2>
           <p className="text-[var(--text-sub)] leading-relaxed">
             {currentSpot.description}
           </p>
@@ -171,7 +211,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
 
         {/* Local Tips */}
         <div className="mb-6">
-          <h2 className="font-semibold text-[var(--text-main)] mb-3">ローカルtips</h2>
+          <h2 className="font-semibold text-[var(--text-main)] mb-3">{t('guide.localTips')}</h2>
           <div className="space-y-2">
             {currentSpot.local_tips.map((tip, index) => (
               <div
@@ -189,7 +229,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
 
         {/* Japanese Phrases */}
         <div className="mb-6">
-          <h2 className="font-semibold text-[var(--text-main)] mb-3">役立つ日本語</h2>
+          <h2 className="font-semibold text-[var(--text-main)] mb-3">{t('guide.phrases')}</h2>
           <div className="space-y-3">
             {currentSpot.japanese_phrases.map((phrase, index) => (
               <JapanesePhraseCard key={index} phrase={phrase} />
@@ -200,7 +240,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
         {/* Etiquette Tips */}
         <div className="mb-6">
           <MannerTipBox
-            title="このスポットのマナー"
+            title={t('guide.mannerTitle')}
             tips={currentSpot.etiquette_tips}
             variant="info"
           />
@@ -215,7 +255,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
             className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-[var(--border)] rounded-2xl text-[var(--text-main)] font-medium hover:bg-gray-50 transition-colors"
           >
             <MapPin className="w-5 h-5 text-[var(--primary)]" />
-            マップを開く
+            {t('guide.openMap')}
           </a>
           {currentSpot.shop_url && (
             <a
@@ -225,7 +265,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               className="flex-1 flex items-center justify-center gap-2 py-3 bg-white border border-[var(--border)] rounded-2xl text-[var(--text-main)] font-medium hover:bg-gray-50 transition-colors"
             >
               <ExternalLink className="w-5 h-5 text-[var(--accent)]" />
-              詳細情報
+              {t('guide.details')}
             </a>
           )}
         </div>
@@ -236,7 +276,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
           className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-4"
         >
           <span className="font-medium text-[var(--text-main)]">
-            全スポットを見る ({spots.length}か所)
+            {t('guide.showAllSpots', { count: spots.length })}
           </span>
           {showAllSpots ? (
             <ChevronUp className="w-5 h-5 text-[var(--muted)]" />
@@ -275,9 +315,9 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
               <div className="w-16 h-16 rounded-full bg-[var(--primary-soft)] flex items-center justify-center">
                 <PartyPopper className="w-8 h-8 text-[var(--primary)]" />
               </div>
-              <h2 className="text-xl font-bold text-[var(--text-main)]">ガイド完了！</h2>
+              <h2 className="text-xl font-bold text-[var(--text-main)]">{t('guide.completed')}</h2>
               <p className="text-sm text-[var(--text-sub)] text-center">
-                {pkg?.title}のすべてのスポットを巡りました。
+                {t('guide.completedDesc', { title: pkg?.title ?? '' })}
               </p>
             </div>
             <div className="flex gap-3">
@@ -285,13 +325,13 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
                 onClick={() => setShowCompleteModal(false)}
                 className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
               >
-                もう一度見る
+                {t('guide.viewAgain')}
               </button>
               <button
                 onClick={() => router.push(`/package/${id}`)}
                 className="flex-1 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
               >
-                パッケージへ戻る
+                {t('guide.backToPackage')}
               </button>
             </div>
           </div>
@@ -299,8 +339,16 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
       )}
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
+      {/* lg:pl-64 … PCではサイドナビ分を空けて本文列と揃える */}
+      {chatError && (
+        <div className="fixed bottom-20 left-0 right-0 z-40 px-5 lg:pl-64">
+          <p className="mx-auto max-w-lg lg:max-w-6xl p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t('chat.openFailed')}
+          </p>
+        </div>
+      )}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] lg:pl-64">
+        <div className="max-w-lg mx-auto flex items-center gap-3 lg:max-w-6xl lg:px-6">
           <button
             onClick={handlePrevSpot}
             disabled={currentSpotIndex === 0}
@@ -311,7 +359,7 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
                 : 'hover:bg-gray-50'
             )}
           >
-            前へ
+            {t('guide.prev')}
           </button>
           <CTAButton
             onClick={handleNextSpot}
@@ -321,12 +369,25 @@ export default function GuideExperiencePage({ params }: { params: Promise<{ id: 
             {currentSpotIndex === spots.length - 1 ? (
               <>
                 <Check className="w-5 h-5" />
-                完了
+                {t('guide.complete')}
               </>
             ) : (
-              '次のスポット'
+              t('guide.next')
             )}
           </CTAButton>
+          {/* ガイド進行中にクリエイターへ質問できるようにする。
+              クリエイター不在・自分が作成者の場合は出さない（package詳細と同じ条件） */}
+          {canChat && (
+            <button
+              onClick={handleOpenChat}
+              disabled={openingChat}
+              aria-label={t('chat.askCreator')}
+              title={t('chat.askCreator')}
+              className="flex-shrink-0 p-3 rounded-2xl border border-[var(--border)] text-[var(--primary)] hover:bg-[var(--primary-soft)]/40 transition-colors disabled:opacity-50"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </div>
     </div>

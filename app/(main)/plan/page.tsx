@@ -25,12 +25,14 @@ import {
   deletePlanItem,
 } from '@/lib/supabase/queries';
 import type { Plan, PlanItem } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
+import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 
-const ITEM_TYPES: { value: PlanItem['item_type']; label: string; icon: string }[] = [
-  { value: 'spot', label: '観光スポット', icon: '📍' },
-  { value: 'meal', label: '食事', icon: '🍜' },
-  { value: 'transport', label: '移動', icon: '✈️' },
-  { value: 'manner', label: 'マナーメモ', icon: '📝' },
+const ITEM_TYPES: { value: PlanItem['item_type']; labelKey: TranslationKey; icon: string }[] = [
+  { value: 'spot', labelKey: 'plan.itemType.spot', icon: '📍' },
+  { value: 'meal', labelKey: 'plan.itemType.meal', icon: '🍜' },
+  { value: 'transport', labelKey: 'plan.itemType.transport', icon: '✈️' },
+  { value: 'manner', labelKey: 'plan.itemType.manner', icon: '📝' },
 ];
 
 function typeIcon(type: string) {
@@ -44,6 +46,7 @@ function getDayCount(plan: Plan): number {
 }
 
 export default function PlanPage() {
+  const t = useT();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -145,7 +148,7 @@ export default function PlanPage() {
       {/* Header */}
       <header className="px-5 pt-6 pb-4 lg:pt-10">
         <div className="flex items-center justify-between mb-2 lg:max-w-4xl">
-          <h1 className="text-2xl font-bold text-[var(--text-main)] lg:text-3xl">旅行計画</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-main)] lg:text-3xl">{t('plan.title')}</h1>
           <button
             onClick={openNewPlanModal}
             className="p-2 bg-[var(--primary-soft)] rounded-full"
@@ -153,7 +156,7 @@ export default function PlanPage() {
             <Plus className="w-5 h-5 text-[var(--primary)]" />
           </button>
         </div>
-        <p className="text-[var(--text-sub)]">AIと一緒にスケジュールを作りましょう</p>
+        <p className="text-[var(--text-sub)]">{t('plan.subtitle')}</p>
       </header>
 
       {/* AI Prompt Box */}
@@ -162,14 +165,14 @@ export default function PlanPage() {
         <div className="p-4 bg-gradient-to-r from-[var(--primary-soft)] to-[var(--accent)]/30 rounded-2xl lg:max-w-4xl">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles className="w-5 h-5 text-[var(--primary)]" />
-            <span className="font-semibold text-[var(--text-main)]">AIルート推薦</span>
+            <span className="font-semibold text-[var(--text-main)]">{t('plan.ai.title')}</span>
           </div>
           <div className="flex gap-2">
             <input
               type="text"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="例：東京でラーメン名店中心の1日コース"
+              placeholder={t('plan.ai.placeholder')}
               className="flex-1 px-4 py-3 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
             <button
@@ -187,13 +190,13 @@ export default function PlanPage() {
         <div className="px-5 lg:max-w-4xl">
           <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
             <Calendar className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />
-            <p className="text-[var(--text-main)] font-semibold mb-1">計画がまだありません</p>
-            <p className="text-sm text-[var(--text-sub)] mb-5">右上の＋ボタンで作成してみましょう</p>
+            <p className="text-[var(--text-main)] font-semibold mb-1">{t('plan.empty.title')}</p>
+            <p className="text-sm text-[var(--text-sub)] mb-5">{t('plan.empty.desc')}</p>
             <button
               onClick={openNewPlanModal}
               className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
             >
-              最初の計画を作成
+              {t('plan.empty.cta')}
             </button>
           </div>
         </div>
@@ -273,7 +276,7 @@ export default function PlanPage() {
               <div className="p-4">
                 {itemsForDay.length === 0 ? (
                   <p className="text-sm text-[var(--muted)] text-center py-4">
-                    この日の予定がまだありません
+                    {t('plan.day.empty')}
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -310,7 +313,7 @@ export default function PlanPage() {
                   className="mt-4 w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[var(--border)] rounded-xl text-sm text-[var(--text-sub)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
                 >
                   <Plus className="w-4 h-4" />
-                  Day {activeDay} にアイテムを追加
+                  {t('plan.day.addItem', { day: activeDay })}
                 </button>
               </div>
             </div>
@@ -335,27 +338,27 @@ export default function PlanPage() {
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {wizardStep === 1 && (
                 <>
-                  <h2 className="text-xl font-bold text-[var(--text-main)] mb-1">旅行の基本情報</h2>
-                  <p className="text-sm text-[var(--text-sub)] mb-5">旅行名と目的地を入力してください</p>
+                  <h2 className="text-xl font-bold text-[var(--text-main)] mb-1">{t('plan.new.title')}</h2>
+                  <p className="text-sm text-[var(--text-sub)] mb-5">{t('plan.new.desc')}</p>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-[var(--text-main)] mb-2">旅行名 *</label>
+                      <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.new.name')}</label>
                       <input
                         type="text"
                         value={newTitle}
                         onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder="例：大阪グルメツアー"
+                        placeholder={t('plan.new.namePlaceholder')}
                         autoFocus
                         className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-[var(--text-main)] mb-2">目的地</label>
+                      <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.new.destination')}</label>
                       <input
                         type="text"
                         value={newLocation}
                         onChange={(e) => setNewLocation(e.target.value)}
-                        placeholder="例：大阪"
+                        placeholder={t('plan.new.destinationPlaceholder')}
                         className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                       />
                     </div>
@@ -365,12 +368,12 @@ export default function PlanPage() {
 
               {wizardStep === 2 && (
                 <>
-                  <h2 className="text-xl font-bold text-[var(--text-main)] mb-1">旅行の日程</h2>
-                  <p className="text-sm text-[var(--text-sub)] mb-5">「{newTitle}」の日程を設定しましょう</p>
+                  <h2 className="text-xl font-bold text-[var(--text-main)] mb-1">{t('plan.new.dates')}</h2>
+                  <p className="text-sm text-[var(--text-sub)] mb-5">{t('plan.new.dateSubtitle', { title: newTitle })}</p>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm font-medium text-[var(--text-main)] mb-2">開始日</label>
+                        <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.new.startDate')}</label>
                         <input
                           type="date"
                           value={newStart}
@@ -379,7 +382,7 @@ export default function PlanPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-[var(--text-main)] mb-2">終了日</label>
+                        <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.new.endDate')}</label>
                         <input
                           type="date"
                           value={newEnd}
@@ -389,7 +392,7 @@ export default function PlanPage() {
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-[var(--muted)]">※ 日程は後から変更できます</p>
+                    <p className="text-xs text-[var(--muted)]">{t('plan.new.dateNote')}</p>
                   </div>
                 </>
               )}
@@ -403,14 +406,14 @@ export default function PlanPage() {
                     onClick={() => setShowNewPlan(false)}
                     className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
                   >
-                    キャンセル
+                    {t('common.cancel')}
                   </button>
                   <CTAButton
                     onClick={() => setWizardStep(2)}
                     className="flex-1"
                     disabled={!newTitle.trim()}
                   >
-                    次へ
+                    {t('common.next')}
                   </CTAButton>
                 </div>
               )}
@@ -420,14 +423,14 @@ export default function PlanPage() {
                     onClick={() => setWizardStep(1)}
                     className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
                   >
-                    戻る
+                    {t('common.back')}
                   </button>
                   <CTAButton
                     onClick={handleCreatePlan}
                     className="flex-1"
                     disabled={creating}
                   >
-                    {creating ? '作成中...' : '計画を作成'}
+                    {creating ? t('plan.new.creating') : t('plan.new.create')}
                   </CTAButton>
                 </div>
               )}
@@ -443,44 +446,44 @@ export default function PlanPage() {
             {/* Handle */}
             <div className="px-6 pt-5 pb-2 flex-shrink-0">
               <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-2" />
-              <h2 className="text-xl font-bold text-[var(--text-main)] mt-2">Day {activeDay} にアイテムを追加</h2>
+              <h2 className="text-xl font-bold text-[var(--text-main)] mt-2">{t('plan.day.addItem', { day: activeDay })}</h2>
             </div>
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto px-6 py-4">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">種類</label>
+                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.type')}</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {ITEM_TYPES.map((t) => (
+                    {ITEM_TYPES.map((itemType) => (
                       <button
-                        key={t.value}
-                        onClick={() => setNewItemType(t.value)}
+                        key={itemType.value}
+                        onClick={() => setNewItemType(itemType.value)}
                         className={cn(
                           'flex items-center gap-2 p-3 rounded-xl border text-sm font-medium transition-all',
-                          newItemType === t.value
+                          newItemType === itemType.value
                             ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
                             : 'border-[var(--border)] text-[var(--text-sub)]'
                         )}
                       >
-                        <span>{t.icon}</span>
-                        {t.label}
+                        <span>{itemType.icon}</span>
+                        {t(itemType.labelKey)}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">タイトル *</label>
+                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.title')}</label>
                   <input
                     type="text"
                     value={newItemTitle}
                     onChange={(e) => setNewItemTitle(e.target.value)}
-                    placeholder="例：渋谷スクランブル交差点"
+                    placeholder={t('plan.item.titlePlaceholder')}
                     className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">時間（任意）</label>
+                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.time')}</label>
                   <input
                     type="time"
                     value={newItemTime}
@@ -498,14 +501,14 @@ export default function PlanPage() {
                   onClick={() => setShowAddItem(false)}
                   className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
                 >
-                  キャンセル
+                  {t('common.cancel')}
                 </button>
                 <CTAButton
                   onClick={handleAddItem}
                   className="flex-1"
                   disabled={!newItemTitle.trim() || addingItem}
                 >
-                  {addingItem ? '追加中...' : '追加'}
+                  {addingItem ? t('plan.item.adding') : t('plan.item.add')}
                 </CTAButton>
               </div>
             </div>

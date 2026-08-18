@@ -1,7 +1,11 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { Star, MapPin, Clock, Package as PackageIcon } from 'lucide-react';
 import type { Package } from '@/lib/types';
+import { useT, useLocale } from '@/lib/i18n/provider';
+import { formatDuration, formatPrice } from '@/lib/i18n/format';
 
 interface PackageCardProps {
   package: Package;
@@ -9,6 +13,8 @@ interface PackageCardProps {
 }
 
 export function PackageCard({ package: pkg, variant = 'default' }: PackageCardProps) {
+  const t = useT();
+  const { locale } = useLocale();
   if (variant === 'compact') {
     return (
       <Link href={`/package/${pkg.id}`} className="block group">
@@ -38,7 +44,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
               </span>
               <span className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                {pkg.duration}
+                {formatDuration(pkg.duration_minutes, t)}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -48,7 +54,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
                 <span className="text-xs text-[var(--muted)]">({pkg.review_count})</span>
               </div>
               <span className="text-sm font-bold text-[var(--primary)]">
-                {pkg.price.toLocaleString()}円
+                {formatPrice(pkg.price, locale, t)}
               </span>
             </div>
           </div>
@@ -101,7 +107,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-4 h-4" />
-              {pkg.duration}
+              {formatDuration(pkg.duration_minutes, t)}
             </span>
           </div>
           <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
@@ -111,7 +117,7 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
               <span className="text-[var(--muted)]">({pkg.review_count})</span>
             </div>
             <span className="text-lg font-bold text-[var(--primary)]">
-              {pkg.price.toLocaleString()}円
+              {formatPrice(pkg.price, locale, t)}
             </span>
           </div>
         </div>

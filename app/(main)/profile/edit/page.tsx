@@ -7,8 +7,10 @@ import { ChevronLeft, Camera, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { CTAButton } from '@/components/cta-button';
 import type { User } from '@supabase/supabase-js';
+import { useT } from '@/lib/i18n/provider';
 
 export default function ProfileEditPage() {
+  const t = useT();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -49,9 +51,9 @@ export default function ProfileEditPage() {
           className="flex items-center gap-1 text-[var(--primary)] mb-4"
         >
           <ChevronLeft className="w-5 h-5" />
-          <span className="text-sm font-medium">プロフィール</span>
+          <span className="text-sm font-medium">{t('profile.title')}</span>
         </button>
-        <h1 className="text-2xl font-bold text-[var(--text-main)]">プロフィールを編集</h1>
+        <h1 className="text-2xl font-bold text-[var(--text-main)]">{t('profileEdit.title')}</h1>
       </header>
 
       <div className="px-5 pb-8 space-y-6">
@@ -60,7 +62,7 @@ export default function ProfileEditPage() {
           <div className="relative">
             <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 ring-4 ring-[var(--primary-soft)]">
               {avatarUrl ? (
-                <Image src={avatarUrl} alt="プロフィール画像" fill className="object-cover" />
+                <Image src={avatarUrl} alt={t('profileEdit.avatar')} fill className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-3xl text-gray-400">
                   {displayName.charAt(0).toUpperCase() || '?'}
@@ -75,28 +77,28 @@ export default function ProfileEditPage() {
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" />
           </div>
-          <p className="text-xs text-[var(--muted)] mt-2">タップして変更</p>
+          <p className="text-xs text-[var(--muted)] mt-2">{t('profileEdit.avatarHint')}</p>
         </div>
 
         {/* Form */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-4 py-4 border-b border-[var(--border)]">
-            <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">表示名</label>
+            <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">{t('profileEdit.displayName')}</label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="名前を入力"
+              placeholder={t('profileEdit.namePlaceholder')}
               maxLength={30}
               className="w-full text-sm text-[var(--text-main)] focus:outline-none bg-transparent"
             />
           </div>
           <div className="px-4 py-4">
-            <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">自己紹介</label>
+            <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">{t('profileEdit.bio')}</label>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              placeholder="旅の好みや自己紹介を書いてみましょう"
+              placeholder={t('profileEdit.bioPlaceholder')}
               maxLength={150}
               rows={4}
               className="w-full text-sm text-[var(--text-main)] focus:outline-none bg-transparent resize-none"
@@ -108,9 +110,9 @@ export default function ProfileEditPage() {
         {/* Email (read-only) */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <div className="px-4 py-4">
-            <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">メールアドレス</label>
+            <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">{t('profileEdit.email')}</label>
             <p className="text-sm text-[var(--text-sub)]">{user?.email ?? '—'}</p>
-            <p className="text-xs text-[var(--muted)] mt-0.5">メールアドレスはサポートからのみ変更できます</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5">{t('profileEdit.emailNote')}</p>
           </div>
         </div>
 
@@ -123,12 +125,12 @@ export default function ProfileEditPage() {
           {saving ? (
             <span className="flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" />
-              保存中...
+              {t('common.saving')}
             </span>
           ) : saved ? (
-            '保存しました！'
+            t('profileEdit.saved')
           ) : (
-            '変更を保存'
+            t('profileEdit.save')
           )}
         </CTAButton>
       </div>

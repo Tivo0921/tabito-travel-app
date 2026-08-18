@@ -14,6 +14,7 @@ import {
   Heart,
   Share2,
   ShoppingBag,
+  MessageCircle,
 } from 'lucide-react';
 import { cn, getYouTubeEmbedUrl } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
@@ -28,7 +29,11 @@ import {
   savePackage,
   unsavePackage,
   hasPurchased,
+  getPackageCreatorUserId,
+  getOrCreateChatThread,
 } from '@/lib/supabase/queries';
+import { useT, useLocale } from '@/lib/i18n/provider';
+import { formatDuration, formatPrice } from '@/lib/i18n/format';
 import type { Package, Spot, Review } from '@/lib/types';
 
 type TabType = 'about' | 'manner' | 'review';
@@ -36,6 +41,8 @@ type TabType = 'about' | 'manner' | 'review';
 export default function PackageDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const t = useT();
+  const { locale } = useLocale();
   const [activeTab, setActiveTab] = useState<TabType>('about');
   const [isSaved, setIsSaved] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
@@ -46,6 +53,9 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const [spots, setSpots] = useState<Spot[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canChat, setCanChat] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
+  const [chatError, setChatError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -54,7 +64,33 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
     getReviewsByPackageId(id).then(setReviews);
     isPackageSaved(id).then(setIsSaved);
     hasPurchased(id).then(setIsPurchased);
+    // チャットを出す条件:
+    //   購入済み・クリエイターにアカウントがある・自分自身でない、の3つすべて。
+    //   購入判定が無いと未購入者にもボタンが見え、押しても
+    //   getOrCreateChatThread が null を返して無反応になる。
+    //   自分が作ったパッケージを自分で買った場合も buyer_id = creator_id となり
+    //   DB制約で弾かれるため出さない。
+    Promise.all([
+      hasPurchased(id),
+      getPackageCreatorUserId(id),
+      createClient().auth.getUser(),
+    ]).then(([purchased, creatorId, { data: { user } }]) => {
+      setCanChat(purchased && !!creatorId && !!user && user.id !== creatorId);
+    });
   }, [id]);
+
+  const handleOpenChat = async () => {
+    setOpeningChat(true);
+    setChatError(false);
+    const thread = await getOrCreateChatThread(id);
+    setOpeningChat(false);
+    if (thread) {
+      router.push(`/chat/${thread.id}`);
+    } else {
+      // 押しても何も起きない状態を作らない
+      setChatError(true);
+    }
+  };
 
   const handleToggleSave = async () => {
     if (isSaved) {
@@ -95,11 +131,11 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
       if (data.url) {
         window.location.href = data.url;
       } else {
-        setPurchaseError(data.error ?? '決済の準備に失敗しました。もう一度お試しください。');
+        setPurchaseError(data.error ?? t('package.error.checkout'));
         setPurchasing(false);
       }
     } catch {
-      setPurchaseError('ネットワークエラーが発生しました。');
+      setPurchaseError(t('package.error.network'));
       setPurchasing(false);
     }
   };
@@ -111,7 +147,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -119,21 +155,21 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   if (!pkg) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
-        <p className="text-[var(--muted)]">ガイドが見つかりません</p>
+        <p className="text-[var(--muted)]">{t('package.notFound')}</p>
         <button
           onClick={() => router.push('/home')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
         >
-          ホームへ
+          {t('common.goHome')}
         </button>
       </div>
     );
   }
 
   const tabs: { id: TabType; label: string }[] = [
-    { id: 'about', label: '紹介' },
-    { id: 'manner', label: 'マナー' },
-    { id: 'review', label: `レビュー (${reviews.length})` },
+    { id: 'about', label: t('package.tab.about') },
+    { id: 'manner', label: t('package.tab.manner') },
+    { id: 'review', label: t('package.tab.review', { count: reviews.length }) },
   ];
 
   return (
@@ -208,7 +244,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
             </span>
             <span className="flex items-center gap-1 text-[var(--text-sub)]">
               <Clock className="w-4 h-4" />
-              {pkg.duration}
+              {formatDuration(pkg.duration_minutes, t)}
             </span>
             <span className="flex items-center gap-1">
               <Star className="w-4 h-4 fill-[var(--primary)] text-[var(--primary)]" />
@@ -221,7 +257,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
           {isPurchased && (
             <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-green-50 rounded-xl w-fit">
               <Check className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-medium text-green-700">購入済み</span>
+              <span className="text-sm font-medium text-green-700">{t('package.purchased')}</span>
             </div>
           )}
 
@@ -254,18 +290,18 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
           {activeTab === 'about' && (
             <div className="space-y-6">
               <div>
-                <h3 className="font-semibold text-[var(--text-main)] mb-2">紹介</h3>
+                <h3 className="font-semibold text-[var(--text-main)] mb-2">{t('package.section.about')}</h3>
                 <p className="text-[var(--text-sub)] leading-relaxed">{pkg.description}</p>
               </div>
 
               {pkg.tutorial_video_url && (
                 <div>
-                  <h3 className="font-semibold text-[var(--text-main)] mb-3">チュートリアル動画</h3>
+                  <h3 className="font-semibold text-[var(--text-main)] mb-3">{t('package.section.video')}</h3>
                   <div className="rounded-2xl overflow-hidden bg-black aspect-video">
                     {getYouTubeEmbedUrl(pkg.tutorial_video_url) ? (
                       <iframe
                         src={getYouTubeEmbedUrl(pkg.tutorial_video_url)!}
-                        title="チュートリアル動画"
+                        title={t('package.section.video')}
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
                         className="w-full h-full"
@@ -281,7 +317,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         </div>
                         <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/60 rounded text-xs text-white">
-                          出発前に視聴
+                          {t('package.watchBefore')}
                         </div>
                       </div>
                     )}
@@ -290,7 +326,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
               )}
 
               <div>
-                <h3 className="font-semibold text-[var(--text-main)] mb-3">含まれる内容</h3>
+                <h3 className="font-semibold text-[var(--text-main)] mb-3">{t('package.section.included')}</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {pkg.features.map((feature, index) => (
                     <div key={index} className="flex items-center gap-2 p-3 bg-[var(--primary-soft)]/30 rounded-xl">
@@ -303,7 +339,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
 
               <div>
                 <h3 className="font-semibold text-[var(--text-main)] mb-3">
-                  含まれるスポット ({spots.length}か所)
+                  {t('package.section.spots', { count: spots.length })}
                 </h3>
                 <div className="space-y-2">
                   {spots.map((spot, index) => (
@@ -316,7 +352,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
 
           {activeTab === 'manner' && (
             <div className="space-y-4">
-              <p className="text-[var(--text-sub)] mb-4">このガイドで紹介するマナーポイントです。</p>
+              <p className="text-[var(--text-sub)] mb-4">{t('package.manner.desc')}</p>
               {spots.slice(0, 3).map((spot) => (
                 <div key={spot.id} className="p-4 bg-[var(--accent)]/10 rounded-2xl">
                   <h4 className="font-semibold text-[var(--text-main)] mb-2">{spot.name}</h4>
@@ -366,7 +402,7 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
                 ))
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-[var(--muted)]">まだレビューがありません</p>
+                  <p className="text-[var(--muted)]">{t('package.review.empty')}</p>
                 </div>
               )}
             </div>
@@ -376,22 +412,43 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Bottom CTA */}
       {/* lg:pl-64 … PCではサイドナビ分を空けて本文列と揃える */}
+      {chatError && (
+        <div className="fixed bottom-20 left-0 right-0 z-40 px-5 lg:pl-64">
+          <p className="mx-auto max-w-lg lg:max-w-6xl p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t('chat.openFailed')}
+          </p>
+        </div>
+      )}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] lg:pl-64">
         <div className="max-w-lg mx-auto flex items-center gap-4 lg:max-w-6xl lg:px-6">
           {/* ボタンがfullWidthなので、縮まないよう明示する（縮むと「円」が改行される） */}
           <div className="flex-shrink-0 whitespace-nowrap">
-            <p className="text-sm text-[var(--text-sub)]">料金</p>
+            <p className="text-sm text-[var(--text-sub)]">{t('package.price')}</p>
             <p className="text-xl font-bold text-[var(--primary)]">
-              {pkg.price.toLocaleString()}円
+              {formatPrice(pkg.price, locale, t)}
             </p>
           </div>
           {isPurchased ? (
-            <CTAButton onClick={handleStartGuide} fullWidth>
-              ガイドを始める
-            </CTAButton>
+            <>
+              <CTAButton onClick={handleStartGuide} fullWidth>
+                {t('package.startGuide')}
+              </CTAButton>
+              {/* クリエイターのアカウントが無いガイド(シード等)ではチャットを出さない */}
+              {canChat && (
+                <button
+                  onClick={handleOpenChat}
+                  disabled={openingChat}
+                  aria-label={t('chat.askCreator')}
+                  title={t('chat.askCreator')}
+                  className="flex-shrink-0 p-3 rounded-2xl border border-[var(--border)] text-[var(--primary)] hover:bg-[var(--primary-soft)]/40 transition-colors disabled:opacity-50"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+              )}
+            </>
           ) : (
             <CTAButton onClick={handleOpenPurchaseModal} fullWidth>
-              購入してガイドを始める
+              {t('package.buyAndStart')}
             </CTAButton>
           )}
         </div>
@@ -407,16 +464,16 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
                 <ShoppingBag className="w-6 h-6 text-[var(--primary)]" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-[var(--text-main)]">ガイドを購入</h2>
+                <h2 className="text-lg font-bold text-[var(--text-main)]">{t('package.modal.title')}</h2>
                 <p className="text-sm text-[var(--text-sub)]">{pkg.title}</p>
               </div>
             </div>
 
             <div className="p-4 bg-gray-50 rounded-2xl mb-6">
               <div className="flex items-center justify-between">
-                <span className="text-[var(--text-sub)]">ガイド料金</span>
+                <span className="text-[var(--text-sub)]">{t('package.modal.price')}</span>
                 <span className="text-xl font-bold text-[var(--primary)]">
-                  {pkg.price.toLocaleString()}円
+                  {formatPrice(pkg.price, locale, t)}
                 </span>
               </div>
             </div>
@@ -432,15 +489,15 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
                 onClick={() => { setShowPurchaseModal(false); setPurchaseError(null); }}
                 className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium"
               >
-                キャンセル
+                {t('common.cancel')}
               </button>
               <CTAButton onClick={handlePurchase} className="flex-1" disabled={purchasing}>
-                {purchasing ? '処理中...' : '購入する'}
+                {purchasing ? t('package.modal.processing') : t('package.modal.buy')}
               </CTAButton>
             </div>
 
             <p className="text-xs text-[var(--muted)] text-center mt-4">
-              Stripeの安全な決済ページへ移動します
+              {t('package.modal.stripeNote')}
             </p>
           </div>
         </div>

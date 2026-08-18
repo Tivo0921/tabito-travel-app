@@ -7,8 +7,10 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import { getMannerCategoryById, getMannerTipsByCategoryId } from '@/lib/supabase/queries';
 import type { MannerCategory, MannerTip } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 export default function MannerCategoryPage({ params }: { params: Promise<{ categoryId: string }> }) {
+  const t = useT();
   const { categoryId } = use(params);
   const router = useRouter();
   const [category, setCategory] = useState<MannerCategory | null>(null);
@@ -22,7 +24,7 @@ export default function MannerCategoryPage({ params }: { params: Promise<{ categ
   if (category === null && tips.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">読み込み中...</p>
+        <p className="text-[var(--muted)]">{t('common.loading')}</p>
       </div>
     );
   }
@@ -30,7 +32,7 @@ export default function MannerCategoryPage({ params }: { params: Promise<{ categ
   if (!category) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-[var(--muted)]">カテゴリが見つかりません</p>
+        <p className="text-[var(--muted)]">{t('mannerCategory.notFound')}</p>
       </div>
     );
   }
@@ -102,7 +104,7 @@ export default function MannerCategoryPage({ params }: { params: Promise<{ categ
           </div>
         ) : (
           <div className="text-center py-12">
-            <p className="text-[var(--muted)]">まだマナーtipsがありません</p>
+            <p className="text-[var(--muted)]">{t('mannerCategory.empty')}</p>
           </div>
         )}
       </div>

@@ -4,13 +4,22 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/logo';
+import { useT } from '@/lib/i18n/provider';
 
 function LoginInner() {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  // 理由コードで文言を出し分ける。profile_failed は「ログインは通ったが
+  // プロフィール作成に失敗した」状態で、汎用の失敗メッセージだと誤解を招く。
+  const errorCode = searchParams.get('error');
   const [error, setError] = useState<string | null>(
-    searchParams.get('error') ? 'ログインに失敗しました。もう一度お試しください。' : null
+    errorCode === 'profile_failed'
+      ? t('login.profileFailed')
+      : errorCode
+        ? t('login.failed')
+        : null,
   );
 
   const supabase = createClient();
@@ -43,10 +52,10 @@ function LoginInner() {
 
         <div className="text-center mb-10">
           <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">
-            ようこそ
+            {t('login.welcome')}
           </h1>
           <p className="text-[var(--text-sub)]">
-            アカウントでログインして旅を始めましょう
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -70,14 +79,14 @@ function LoginInner() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            {loading ? '処理中...' : 'Googleでログイン'}
+            {loading ? t('login.processing') : t('login.google')}
           </button>
         </div>
 
         {/* Divider */}
         <div className="flex items-center gap-4 w-full max-w-sm my-6">
           <div className="flex-1 h-px bg-[var(--border)]" />
-          <span className="text-sm text-[var(--muted)]">または</span>
+          <span className="text-sm text-[var(--muted)]">{t('login.or')}</span>
           <div className="flex-1 h-px bg-[var(--border)]" />
         </div>
 
@@ -86,16 +95,16 @@ function LoginInner() {
           onClick={handleGuestAccess}
           className="text-sm text-[var(--text-sub)] hover:text-[var(--primary)] transition-colors"
         >
-          ログインせずに見てみる
+          {t('login.guest')}
         </button>
       </main>
 
       {/* Footer */}
       <footer className="p-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] text-center">
         <p className="text-xs text-[var(--muted)]">
-          ログインすることで、
-          <span className="underline">利用規約</span>と
-          <span className="underline">プライバシーポリシー</span>に同意したことになります。
+          {t('login.agreePrefix')}
+          <span className="underline">{t('login.terms')}</span>{t('login.agreeMiddle')}
+          <span className="underline">{t('login.privacy')}</span>{t('login.agreeSuffix')}
         </p>
       </footer>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DEFAULT_LOCALE,
   LOCALE_COOKIE,
@@ -35,19 +36,34 @@ export function LocaleProvider({
   children: React.ReactNode;
 }) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
+  const router = useRouter();
 
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
     // <html lang> も追随させる（スクリーンリーダーの読み上げ言語に効く）
     document.documentElement.lang = next;
-  }, []);
+    // サーバーで描画している部分（テストモードバナー、タブタイトル等）は
+    // Provider の外側にあり state 更新では変わらない。再取得して追随させる。
+    router.refresh();
+  }, [router]);
 
   const t = useCallback(
     (key: TranslationKey, vars?: TranslateVars) => {
       const dict = DICTIONARIES[locale] ?? DICTIONARIES[DEFAULT_LOCALE];
+
+      // 単数形。英語で「1 reviews」にならないよう、count が 1 のときは
+      // `<key>_one` があればそちらを使う。日本語・韓国語は単複を区別しないので
+      // 同じ文言を入れてある（型の網羅性を保つため）。
+      let lookupKey = key;
+      if (typeof vars?.count === 'number') {
+        const category = new Intl.PluralRules(locale).select(vars.count);
+        const candidate = `${key}_${category}` as TranslationKey;
+        if (candidate in dict) lookupKey = candidate;
+      }
+
       // 未翻訳のキーは日本語にフォールバックする（空文字を出さない）
-      const template = dict[key] ?? DICTIONARIES[DEFAULT_LOCALE][key] ?? key;
+      const template = dict[lookupKey] ?? DICTIONARIES[DEFAULT_LOCALE][lookupKey] ?? key;
       if (!vars) return template;
       return template.replace(/\{(\w+)\}/g, (match, name: string) =>
         name in vars ? String(vars[name]) : match

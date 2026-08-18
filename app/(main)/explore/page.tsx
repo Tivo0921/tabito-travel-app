@@ -192,7 +192,7 @@ function ExploreInner() {
                     </h3>
                     <div className="flex items-center gap-1 text-xs text-[var(--muted)]">
                       <Clock className="w-3 h-3" />
-                      {t('common.readTime', { min: article.read_time })}
+                      {t('common.readTime', { count: article.read_time })}
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-[var(--muted)] self-center flex-shrink-0" />

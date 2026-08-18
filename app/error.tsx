@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { Logo } from '@/components/logo';
+import { useT } from '@/lib/i18n/provider';
 
 export default function Error({
   error,
@@ -10,6 +11,7 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -24,12 +26,10 @@ export default function Error({
         </div>
 
         <h1 className="text-xl font-bold text-gray-800 mb-3">
-          問題が発生しました
+          {t('error.title')}
         </h1>
         <p className="text-gray-500 text-sm leading-relaxed mb-8">
-          一時的なエラーが発生しました。
-          <br />
-          もう一度お試しください。
+          {t('error.desc')}
         </p>
 
         <div className="flex flex-col gap-3">
@@ -37,13 +37,13 @@ export default function Error({
             onClick={reset}
             className="px-6 py-3 bg-[#B81417] text-white rounded-2xl font-semibold hover:opacity-90 transition-opacity"
           >
-            再読み込み
+            {t('error.reload')}
           </button>
           <a
             href="/home"
             className="px-6 py-3 text-sm text-gray-500 hover:text-gray-800 transition-colors"
           >
-            ホームに戻る
+            {t('error.backHome')}
           </a>
         </div>
       </div>

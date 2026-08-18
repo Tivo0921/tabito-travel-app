@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense } from 'react';
 import { Check, Loader2 } from 'lucide-react';
+import { useT } from '@/lib/i18n/provider';
 
 function SuccessInner() {
+  const t = useT();
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get('session_id');
@@ -35,7 +37,7 @@ function SuccessInner() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-[var(--primary)] animate-spin" />
-        <p className="text-[var(--text-sub)]">決済を確認中...</p>
+        <p className="text-[var(--text-sub)]">{t('purchase.verifying')}</p>
       </div>
     );
   }
@@ -43,15 +45,15 @@ function SuccessInner() {
   if (status === 'error') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
-        <p className="text-[var(--text-main)] font-semibold">確認に失敗しました</p>
+        <p className="text-[var(--text-main)] font-semibold">{t('purchase.failed.title')}</p>
         <p className="text-[var(--text-sub)] text-sm text-center">
-          決済は完了している可能性があります。しばらくしてから再度お試しください。
+          {t('purchase.failed.desc')}
         </p>
         <button
           onClick={() => router.push('/home')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
         >
-          ホームへ
+          {t('common.goHome')}
         </button>
       </div>
     );
@@ -63,14 +65,14 @@ function SuccessInner() {
         <Check className="w-10 h-10 text-green-600" />
       </div>
       <div className="text-center">
-        <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">購入完了！</h1>
-        <p className="text-[var(--text-sub)]">ガイドへようこそ。旅を楽しんでください。</p>
+        <h1 className="text-2xl font-bold text-[var(--text-main)] mb-2">{t('purchase.success.title')}</h1>
+        <p className="text-[var(--text-sub)]">{t('purchase.success.desc')}</p>
       </div>
       <button
         onClick={() => router.push(packageId ? `/guide/${packageId}` : '/home')}
         className="w-full max-w-xs py-4 bg-[var(--primary)] text-white rounded-2xl font-semibold text-lg"
       >
-        ガイドを始める
+        {t('package.startGuide')}
       </button>
     </div>
   );

@@ -1,7 +1,10 @@
+'use client';
+
 import Image from 'next/image';
 import { Check, Clock, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Spot } from '@/lib/types';
+import { useT } from '@/lib/i18n/provider';
 
 interface SpotProgressItemProps {
   spot: Spot;
@@ -10,6 +13,7 @@ interface SpotProgressItemProps {
 }
 
 export function SpotProgressItem({ spot, status, onClick }: SpotProgressItemProps) {
+  const t = useT();
   return (
     <button
       onClick={onClick}
@@ -53,14 +57,14 @@ export function SpotProgressItem({ spot, status, onClick }: SpotProgressItemProp
         <div className="flex items-center gap-2 text-xs text-[var(--text-sub)] mt-0.5">
           <span className="flex items-center gap-1">
             <Clock className="w-3 h-3" />
-            {spot.duration_minutes}分
+            {t('spot.minutes', { count: spot.duration_minutes ?? 0 })}
           </span>
         </div>
       </div>
       {status === 'current' && (
         <div className="flex-shrink-0">
           <span className="px-2.5 py-1 bg-[var(--primary)] text-white text-xs font-semibold rounded-full">
-            現在
+            {t('spot.current')}
           </span>
         </div>
       )}

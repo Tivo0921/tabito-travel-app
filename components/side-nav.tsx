@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Compass, CalendarDays, User, Settings, HelpCircle } from 'lucide-react';
+import { Home, Compass, CalendarDays, User, Settings, HelpCircle, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
 import { useT } from '@/lib/i18n/provider';
@@ -12,6 +12,7 @@ const mainItems = [
   { href: '/home', labelKey: 'nav.home', icon: Home },
   { href: '/explore', labelKey: 'nav.explore', icon: Compass },
   { href: '/plan', labelKey: 'nav.plan', icon: CalendarDays },
+  { href: '/chat', labelKey: 'chat.nav', icon: MessageCircle },
   { href: '/profile', labelKey: 'nav.profile', icon: User },
 ] satisfies { href: string; labelKey: TranslationKey; icon: typeof Home }[];
 
@@ -56,7 +57,7 @@ export function SideNav() {
   return (
     <aside className="hidden lg:flex fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-[var(--border)] bg-white">
       <div className="px-6 py-6">
-        <Link href="/home" aria-label="TABITO ホーム">
+        <Link href="/home" aria-label={t('nav.homeAria')}>
           <Logo size="sm" priority />
         </Link>
       </div>
