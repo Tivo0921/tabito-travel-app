@@ -138,9 +138,12 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       const newId = await createCreatorPackage(
         guideId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin,
       );
+      // 新規作成も同じ扱い。guide が未指定/他人のものだと insert が弾かれるので、
+      // 何も起きないまま放置しない
+      setInfoSaved(!!newId);
+      setSaveError(!newId);
       if (newId) {
         setPackageId(newId);
-        setInfoSaved(true);
         router.replace(`/creator/package/${newId}`);
       }
     } else {
@@ -202,7 +205,9 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const handleDeleteSpot = async (spotId: string) => {
     if (!packageId || !confirm(t('pkgEdit.confirmDeleteSpot'))) return;
     const ok = await deleteCreatorSpot(spotId, packageId);
-    if (!ok) return setSaveError(true);
+    // 成功時にクリアしないと、一度失敗したバナーが以降ずっと残る
+    setSaveError(!ok);
+    if (!ok) return;
     setSpots((prev) => prev.filter((s) => s.id !== spotId));
   };
 
