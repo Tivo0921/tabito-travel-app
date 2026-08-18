@@ -12,15 +12,30 @@ export async function GET(request: Request) {
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // 初回ログイン時にprofilesレコードを作成（既存の場合は無視）
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: user.id,
-          display_name: user.user_metadata?.full_name ?? user.email ?? 'ユーザー',
-          avatar_url: user.user_metadata?.avatar_url ?? null,
-          native_language: 'ko',
-        });
-        if (profileError && profileError.code !== '23505') {
-          console.error('Profile creation error:', profileError);
+        // 初回ログイン時だけ profiles を作る。
+        // ignoreDuplicates で既存行には触れない。ここで上書きすると、
+        // ユーザーが変更した表示名や言語設定がログインのたびに Google の値と
+        // 'ko' に戻ってしまう。
+        // メールアドレスは profiles に持たない（チャット相手に行ごと開放される
+        // ポリシーがあるため）。通知の宛先が要る処理はサーバ側で auth.users を読む。
+        const { error: profileError } = await supabase.from('profiles').upsert(
+          {
+            id: user.id,
+            display_name: user.user_metadata?.full_name ?? user.email ?? 'ユーザー',
+            avatar_url: user.user_metadata?.avatar_url ?? null,
+            native_language: 'ko',
+          },
+          { onConflict: 'id', ignoreDuplicates: true },
+        );
+        // profiles が無いと購入もプロフィール表示もできない。握り潰すと
+        // 「ログイン済みなのに何も動かない」状態になるので、必ず表に出す。
+        //
+        // ただしセッションは成立しているので「ログインに失敗」ではない。
+        // 汎用のログインエラーに混ぜると原因が分からなくなるため、
+        // 専用の理由コードを渡して個別の文言と再試行導線を出す。
+        if (profileError) {
+          console.error('Profile creation failed:', profileError.code, profileError.message);
+          return NextResponse.redirect(`${origin}/login?error=profile_failed`);
         }
       }
       return NextResponse.redirect(`${origin}${next}`);

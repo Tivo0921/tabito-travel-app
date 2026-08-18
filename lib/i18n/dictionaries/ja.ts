@@ -85,6 +85,24 @@ export const ja = {
   'settings.item.review': 'アプリを評価する',
   'settings.item.deleteAccount': 'アカウント削除',
 
+  // チャット
+  'chat.title': 'メッセージ',
+  'chat.nav': 'メッセージ',
+  'chat.askCreator': 'クリエイターに質問する',
+  'chat.empty.title': 'メッセージはまだありません',
+  'chat.empty.desc': 'ガイドを購入すると、作成したクリエイターに質問できます',
+  'chat.inputPlaceholder': 'メッセージを入力',
+  'chat.send': '送信',
+  'chat.read': '既読',
+  'chat.noMessages': 'まだメッセージがありません。気軽に質問してみましょう',
+  'chat.threadNotFound': 'チャットが見つかりません',
+  'chat.loadFailed': 'メッセージを送信できませんでした。通信状況を確認してもう一度お試しください',
+  'chat.aboutPackage': '「{title}」について',
+  'chat.readOnly': 'このチャットは終了しました。閲覧のみ可能です',
+  'chat.startPrompt': 'メッセージを送ってみましょう',
+  'chat.listFailed': 'メッセージ一覧を読み込めませんでした。時間をおいて再度お試しください',
+  'chat.realtimeDown': '新着の自動受信が止まっています。画面を再読み込みしてください',
+  'chat.openFailed': 'チャットを開けませんでした。通信状況を確認してもう一度お試しください',
 
   // 計画
   'plan.title': '旅行計画',
@@ -221,6 +239,7 @@ export const ja = {
   'login.processing': '処理中...',
   'login.or': 'または',
   'login.guest': 'ログインせずに見てみる',
+  'login.profileFailed': 'アカウント情報の作成に失敗しました。もう一度ログインしてください。続く場合はサポートへご連絡ください',
   'login.failed': 'ログインに失敗しました。もう一度お試しください。',
   'login.terms': '利用規約',
   'login.privacy': 'プライバシーポリシー',

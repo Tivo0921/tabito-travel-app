@@ -14,6 +14,7 @@ import {
   Heart,
   Share2,
   ShoppingBag,
+  MessageCircle,
 } from 'lucide-react';
 import { cn, getYouTubeEmbedUrl } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
@@ -28,6 +29,8 @@ import {
   savePackage,
   unsavePackage,
   hasPurchased,
+  getPackageCreatorUserId,
+  getOrCreateChatThread,
 } from '@/lib/supabase/queries';
 import { useT, useLocale } from '@/lib/i18n/provider';
 import { formatDuration, formatPrice } from '@/lib/i18n/format';
@@ -50,6 +53,9 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const [spots, setSpots] = useState<Spot[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [canChat, setCanChat] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
+  const [chatError, setChatError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -58,8 +64,33 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
     getReviewsByPackageId(id).then(setReviews);
     isPackageSaved(id).then(setIsSaved);
     hasPurchased(id).then(setIsPurchased);
+    // チャットを出す条件:
+    //   購入済み・クリエイターにアカウントがある・自分自身でない、の3つすべて。
+    //   購入判定が無いと未購入者にもボタンが見え、押しても
+    //   getOrCreateChatThread が null を返して無反応になる。
+    //   自分が作ったパッケージを自分で買った場合も buyer_id = creator_id となり
+    //   DB制約で弾かれるため出さない。
+    Promise.all([
+      hasPurchased(id),
+      getPackageCreatorUserId(id),
+      createClient().auth.getUser(),
+    ]).then(([purchased, creatorId, { data: { user } }]) => {
+      setCanChat(purchased && !!creatorId && !!user && user.id !== creatorId);
+    });
   }, [id]);
 
+  const handleOpenChat = async () => {
+    setOpeningChat(true);
+    setChatError(false);
+    const thread = await getOrCreateChatThread(id);
+    setOpeningChat(false);
+    if (thread) {
+      router.push(`/chat/${thread.id}`);
+    } else {
+      // 押しても何も起きない状態を作らない
+      setChatError(true);
+    }
+  };
 
   const handleToggleSave = async () => {
     if (isSaved) {
@@ -381,6 +412,13 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Bottom CTA */}
       {/* lg:pl-64 … PCではサイドナビ分を空けて本文列と揃える */}
+      {chatError && (
+        <div className="fixed bottom-20 left-0 right-0 z-40 px-5 lg:pl-64">
+          <p className="mx-auto max-w-lg lg:max-w-6xl p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t('chat.openFailed')}
+          </p>
+        </div>
+      )}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] lg:pl-64">
         <div className="max-w-lg mx-auto flex items-center gap-4 lg:max-w-6xl lg:px-6">
           {/* ボタンがfullWidthなので、縮まないよう明示する（縮むと「円」が改行される） */}
@@ -391,9 +429,23 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
             </p>
           </div>
           {isPurchased ? (
-            <CTAButton onClick={handleStartGuide} fullWidth>
-              {t('package.startGuide')}
-            </CTAButton>
+            <>
+              <CTAButton onClick={handleStartGuide} fullWidth>
+                {t('package.startGuide')}
+              </CTAButton>
+              {/* クリエイターのアカウントが無いガイド(シード等)ではチャットを出さない */}
+              {canChat && (
+                <button
+                  onClick={handleOpenChat}
+                  disabled={openingChat}
+                  aria-label={t('chat.askCreator')}
+                  title={t('chat.askCreator')}
+                  className="flex-shrink-0 p-3 rounded-2xl border border-[var(--border)] text-[var(--primary)] hover:bg-[var(--primary-soft)]/40 transition-colors disabled:opacity-50"
+                >
+                  <MessageCircle className="w-5 h-5" />
+                </button>
+              )}
+            </>
           ) : (
             <CTAButton onClick={handleOpenPurchaseModal} fullWidth>
               {t('package.buyAndStart')}

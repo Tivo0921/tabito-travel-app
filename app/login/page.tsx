@@ -11,8 +11,15 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  // 理由コードで文言を出し分ける。profile_failed は「ログインは通ったが
+  // プロフィール作成に失敗した」状態で、汎用の失敗メッセージだと誤解を招く。
+  const errorCode = searchParams.get('error');
   const [error, setError] = useState<string | null>(
-    searchParams.get('error') ? t('login.failed') : null
+    errorCode === 'profile_failed'
+      ? t('login.profileFailed')
+      : errorCode
+        ? t('login.failed')
+        : null,
   );
 
   const supabase = createClient();

@@ -81,6 +81,24 @@ export const ko: Record<TranslationKey, string> = {
   'settings.item.review': '앱 평가하기',
   'settings.item.deleteAccount': '계정 삭제',
 
+  // 채팅
+  'chat.title': '메시지',
+  'chat.nav': '메시지',
+  'chat.askCreator': '크리에이터에게 문의하기',
+  'chat.empty.title': '아직 메시지가 없습니다',
+  'chat.empty.desc': '가이드를 구매하면 만든 크리에이터에게 질문할 수 있어요',
+  'chat.inputPlaceholder': '메시지를 입력하세요',
+  'chat.send': '보내기',
+  'chat.read': '읽음',
+  'chat.noMessages': '아직 메시지가 없습니다. 편하게 질문해 보세요',
+  'chat.threadNotFound': '채팅을 찾을 수 없습니다',
+  'chat.loadFailed': '메시지를 보내지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
+  'chat.aboutPackage': '「{title}」에 대해',
+  'chat.readOnly': '종료된 채팅입니다. 읽기만 가능합니다',
+  'chat.startPrompt': '메시지를 보내 대화를 시작해 보세요',
+  'chat.listFailed': '메시지 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요',
+  'chat.realtimeDown': '실시간 수신이 끊겼습니다. 페이지를 새로고침해 주세요',
+  'chat.openFailed': '채팅을 열지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
 
   // 일정
   'plan.title': '여행 일정',
@@ -217,6 +235,7 @@ export const ko: Record<TranslationKey, string> = {
   'login.processing': '처리 중...',
   'login.or': '또는',
   'login.guest': '로그인 없이 둘러보기',
+  'login.profileFailed': '계정 정보 생성에 실패했습니다. 다시 로그인해 주세요. 계속되면 지원팀에 문의해 주세요',
   'login.failed': '로그인에 실패했습니다. 다시 시도해 주세요.',
   'login.terms': '이용약관',
   'login.privacy': '개인정보처리방침',
