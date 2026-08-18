@@ -496,8 +496,8 @@ export const ja = {
 
   // 所要時間（分をDBに持ち、表示時に整形する）
   'duration.days': '{count}日',
-  'duration.halfDay': '半日',
   'duration.hours': '{count}時間',
+  'duration.hoursMinutes': '{hours}{minutes}',
   'duration.minutes': '{count}分',
   // 単数形（日本語は単複を区別しないので複数形と同じ）
   'common.readTime_one': '{count}分で読める',
