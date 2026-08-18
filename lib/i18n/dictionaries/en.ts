@@ -96,6 +96,7 @@ export const en: Record<TranslationKey, string> = {
   'chat.aboutPackage': 'About "{title}"',
   'chat.readOnly': 'This chat has ended. You can still read it',
   'chat.startPrompt': 'Send a message to get started',
+  'chat.openFailed': 'Could not open the chat. Check your connection and try again',
 
   // Plan
   'plan.title': 'Trip plans',

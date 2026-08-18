@@ -14,6 +14,18 @@ import { useT } from '@/lib/i18n/provider';
 import { cn } from '@/lib/utils';
 import type { ChatThread, ChatMessage } from '@/lib/types';
 
+/**
+ * id で重複排除して時刻順に並べ直す。
+ * 初回フェッチとRealtime購読は同時に走るため、置き換えにすると
+ * 「購読が先に入れた新着を、後から解決した古いスナップショットが消す」
+ * という取りこぼしが起きる。必ずマージする。
+ */
+function mergeMessages(a: ChatMessage[], b: ChatMessage[]): ChatMessage[] {
+  const byId = new Map<string, ChatMessage>();
+  for (const m of [...a, ...b]) byId.set(m.id, m);
+  return [...byId.values()].sort((x, y) => x.created_at.localeCompare(y.created_at));
+}
+
 export default function ChatThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -36,7 +48,8 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
     Promise.all([getChatThreadById(id), getChatMessages(id)])
       .then(([th, msgs]) => {
         setThread(th);
-        setMessages(msgs);
+        // 置き換えず、購読が先に入れた分を残す
+        setMessages((prev) => mergeMessages(prev, msgs));
         if (th) markChatThreadRead(id);
       })
       .finally(() => setLoading(false));
@@ -52,10 +65,8 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
         { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `thread_id=eq.${id}` },
         (payload) => {
           const incoming = payload.new as ChatMessage;
-          setMessages((prev) =>
-            // 自分の送信は楽観更新で既に入っているので重複させない
-            prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]
-          );
+          // 自分の送信は楽観更新で既に入っているので mergeMessages が吸収する
+          setMessages((prev) => mergeMessages(prev, [incoming]));
           markChatThreadRead(id);
         }
       )
@@ -84,7 +95,7 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
       return;
     }
     setDraft('');
-    setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+    setMessages((prev) => mergeMessages(prev, [sent]));
   };
 
   if (loading) {
@@ -112,7 +123,10 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   const canPost = thread.status === 'open';
 
   return (
-    <div className="flex flex-col min-h-screen pt-[env(safe-area-inset-top)] lg:max-w-3xl">
+    // 親レイアウト((main)/layout.tsx)の pb-28 / lg:pb-12 を打ち消す。
+    // 残したままだと入力欄の下に空白の帯ができ、sticky の入力バーが浮いて見える。
+    // 高さも min-h-screen だと 100vh + 親padding になり必ずスクロールが出るため使わない。
+    <div className="flex flex-col h-[100dvh] pt-[env(safe-area-inset-top)] -mb-28 lg:-mb-12 lg:max-w-3xl">
       <header className="px-5 pt-6 pb-4 border-b border-[var(--border)] lg:pt-10">
         <button
           onClick={() => router.push('/chat')}

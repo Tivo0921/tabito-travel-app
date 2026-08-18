@@ -12,20 +12,29 @@ export async function GET(request: Request) {
     if (!error) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // 初回ログイン時に profiles を作成し、再ログイン時は最新情報に更新する。
-        // email は新着メッセージ通知の宛先に使うので Google から取得した値を保持する。
+        // 初回ログイン時だけ profiles を作る。
+        // ignoreDuplicates で既存行には触れない。ここで上書きすると、
+        // ユーザーが変更した表示名や言語設定がログインのたびに Google の値と
+        // 'ko' に戻ってしまう。
+        // メールアドレスは profiles に持たない（チャット相手に行ごと開放される
+        // ポリシーがあるため）。通知の宛先が要る処理はサーバ側で auth.users を読む。
         const { error: profileError } = await supabase.from('profiles').upsert(
           {
             id: user.id,
             display_name: user.user_metadata?.full_name ?? user.email ?? 'ユーザー',
             avatar_url: user.user_metadata?.avatar_url ?? null,
-            email: user.email ?? null,
             native_language: 'ko',
           },
-          { onConflict: 'id' },
+          { onConflict: 'id', ignoreDuplicates: true },
         );
+        // profiles が無いと購入もプロフィール表示もできない。
+        // 握り潰すと「ログイン済みなのに何も動かない」状態になるため、
+        // ログイン失敗として扱い、やり直せるようにする。
         if (profileError) {
-          console.error('Profile upsert error:', profileError.message, profileError);
+          console.error('Profile creation failed:', profileError.code, profileError.message);
+          return NextResponse.redirect(
+            `${origin}/login?error=profile_failed&code=${encodeURIComponent(profileError.code ?? 'unknown')}`,
+          );
         }
       }
       return NextResponse.redirect(`${origin}${next}`);

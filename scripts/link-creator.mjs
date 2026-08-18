@@ -35,35 +35,53 @@ const db = createClient(url, key, { auth: { persistSession: false } });
 
 const [email, guideIdArg] = process.argv.slice(2);
 
+/**
+ * メールは profiles ではなく auth.users にある（profiles はチャット相手に
+ * 行ごと開放されるため個人情報を置かない方針）。
+ * このスクリプトはサービスロールで動くので Admin API から引ける。
+ */
+async function listUsers() {
+  const { data } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
+  return data?.users ?? [];
+}
+
 const { data: guides } = await db
   .from('guides')
   .select('id, location, user_id')
   .order('location');
 
 if (!email) {
-  const { data: profiles } = await db.from('profiles').select('id, display_name, email');
+  const users = await listUsers();
+  const { data: profiles } = await db.from('profiles').select('id, display_name');
   console.log('\n■ ログイン済みユーザー');
-  for (const p of profiles ?? []) {
-    console.log(`  ${p.email ?? '(メール未設定)'}  ${p.display_name ?? ''}`);
+  for (const u of users) {
+    const prof = (profiles ?? []).find((p) => p.id === u.id);
+    console.log(`  ${u.email ?? '(メール未設定)'}  ${prof?.display_name ?? ''}`);
   }
   console.log('\n■ ガイド');
   for (const g of guides ?? []) {
-    const owner = (profiles ?? []).find((p) => p.id === g.user_id);
+    const owner = users.find((u) => u.id === g.user_id);
     console.log(`  ${g.id}  ${g.location}  → ${owner?.email ?? g.user_id ?? '(未紐付け)'}`);
   }
   console.log('\n使い方: node scripts/link-creator.mjs <email> [guide_id]\n');
   process.exit(0);
 }
 
+const user = (await listUsers()).find((u) => u.email === email);
+if (!user) {
+  console.error(`見つかりません: ${email}`);
+  console.error('先にそのアカウントでアプリにGoogleログインしてください。');
+  process.exit(1);
+}
+
 const { data: profile } = await db
   .from('profiles')
   .select('id, display_name, avatar_url')
-  .eq('email', email)
+  .eq('id', user.id)
   .maybeSingle();
 
 if (!profile) {
-  console.error(`見つかりません: ${email}`);
-  console.error('先にそのアカウントでアプリにGoogleログインしてください。');
+  console.error(`profiles が未作成です: ${email}`);
   process.exit(1);
 }
 

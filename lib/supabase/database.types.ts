@@ -825,7 +825,6 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
-          email: string | null
           id: string
           native_language: string
           updated_at: string
@@ -834,7 +833,6 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
-          email?: string | null
           id: string
           native_language?: string
           updated_at?: string
@@ -843,7 +841,6 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
-          email?: string | null
           id?: string
           native_language?: string
           updated_at?: string
@@ -1062,7 +1059,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_chat_thread_summaries: {
+        Args: never
+        Returns: {
+          last_message_at: string
+          last_message_body: string
+          thread_id: string
+          unread_count: number
+        }[]
+      }
+      mark_chat_thread_read: {
+        Args: { target_thread_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

@@ -43,11 +43,12 @@ inserted_users AS (
   RETURNING id
 ),
 inserted_profiles AS (
-  INSERT INTO public.profiles (id, display_name, email, native_language)
-  SELECT user_id, display_name, email, 'ko' FROM demo_creators
+  -- profiles にメールは持たない（チャット相手に行ごと開放されるポリシーがあるため）。
+  -- ログイン用のメールは auth.users 側にだけある。
+  INSERT INTO public.profiles (id, display_name, native_language)
+  SELECT user_id, display_name, 'ko' FROM demo_creators
   ON CONFLICT (id) DO UPDATE
-    SET display_name = EXCLUDED.display_name,
-        email = EXCLUDED.email
+    SET display_name = EXCLUDED.display_name
   RETURNING id
 )
 UPDATE public.guides g

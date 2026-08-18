@@ -100,6 +100,7 @@ export const ja = {
   'chat.aboutPackage': '「{title}」について',
   'chat.readOnly': 'このチャットは終了しました。閲覧のみ可能です',
   'chat.startPrompt': 'メッセージを送ってみましょう',
+  'chat.openFailed': 'チャットを開けませんでした。通信状況を確認してもう一度お試しください',
 
   // 計画
   'plan.title': '旅行計画',

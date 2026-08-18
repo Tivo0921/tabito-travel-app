@@ -96,6 +96,7 @@ export const ko: Record<TranslationKey, string> = {
   'chat.aboutPackage': '「{title}」에 대해',
   'chat.readOnly': '종료된 채팅입니다. 읽기만 가능합니다',
   'chat.startPrompt': '메시지를 보내 대화를 시작해 보세요',
+  'chat.openFailed': '채팅을 열지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
 
   // 일정
   'plan.title': '여행 일정',

@@ -13,7 +13,13 @@ export default function ChatListPage() {
   const router = useRouter();
   const [threads, setThreads] = useState<ChatListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openError, setOpenError] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
+
+  // クリエイターは同じパッケージについて購入者ごとに別スレッドを持つため、
+  // package_id では衝突する。スレッド未作成の行は購入単位で一意なので
+  // package_id を接頭辞付きで使う。
+  const rowKey = (item: ChatListItem) => item.thread_id ?? `pkg:${item.package_id}`;
 
   useEffect(() => {
     getChatListItems()
@@ -27,10 +33,15 @@ export default function ChatListPage() {
       router.push(`/chat/${item.thread_id}`);
       return;
     }
-    setOpening(item.package_id);
+    setOpening(rowKey(item));
     const thread = await getOrCreateChatThread(item.package_id);
     setOpening(null);
-    if (thread) router.push(`/chat/${thread.id}`);
+    if (thread) {
+      router.push(`/chat/${thread.id}`);
+    } else {
+      // 押しても何も起きない状態を作らない
+      setOpenError(true);
+    }
   };
 
   return (
@@ -40,6 +51,12 @@ export default function ChatListPage() {
           {t('chat.title')}
         </h1>
       </header>
+
+      {openError && (
+        <p className="mx-5 mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+          {t('chat.openFailed')}
+        </p>
+      )}
 
       {loading ? (
         <p className="px-5 py-12 text-center text-[var(--muted)]">{t('common.loading')}</p>
@@ -52,10 +69,10 @@ export default function ChatListPage() {
       ) : (
         <ul className="px-5 pb-8 space-y-2">
           {threads.map((thread) => (
-            <li key={thread.package_id}>
+            <li key={rowKey(thread)}>
               <button
                 onClick={() => openThread(thread)}
-                disabled={opening === thread.package_id}
+                disabled={opening === rowKey(thread)}
                 className="w-full text-left flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow disabled:opacity-60"
               >
                 <Avatar

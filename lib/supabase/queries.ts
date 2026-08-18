@@ -1407,45 +1407,59 @@ export async function getOrCreateChatThread(packageId: string): Promise<ChatThre
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // 既存スレッド
-  const { data: existing } = await supabase
-    .from('chat_threads')
-    .select('*')
-    .eq('package_id', packageId)
-    .eq('buyer_id', user.id)
-    .limit(1)
-    .maybeSingle();
-  if (existing) return existing as ChatThread;
-
-  // 完了済みの購入が要る（RLS で自分の分しか見えない）
+  // 完了済みの購入が要る（RLS で自分の分しか見えない）。
+  // スレッドの一意制約は purchase_id なので、探すのも作るのもこれを基準にする。
   const { data: purchase } = await supabase
     .from('purchases')
     .select('id')
     .eq('package_id', packageId)
     .eq('status', 'completed')
+    .order('purchased_at', { ascending: true })
     .limit(1)
     .maybeSingle();
   if (!purchase) return null;
 
+  const { data: existing } = await supabase
+    .from('chat_threads')
+    .select('*')
+    .eq('purchase_id', purchase.id)
+    .maybeSingle();
+  if (existing) return existing as ChatThread;
+
   const creatorId = await getPackageCreatorUserId(packageId);
   if (!creatorId) return null;
 
-  const { data, error } = await supabase
+  // 二重タップなどで同時に走っても片方が一意制約で落ちないよう、
+  // UNIQUE が張られている purchase_id に対する upsert にする。
+  // 競合に負けた側は行を返さないので、直後に読み直して同じスレッドに入れる。
+  const { error } = await supabase
     .from('chat_threads')
-    .insert({
-      purchase_id: purchase.id,
-      package_id: packageId,
-      buyer_id: user.id,
-      creator_id: creatorId,
-    })
-    .select()
-    .single();
+    .upsert(
+      {
+        purchase_id: purchase.id,
+        package_id: packageId,
+        buyer_id: user.id,
+        creator_id: creatorId,
+      },
+      { onConflict: 'purchase_id', ignoreDuplicates: true },
+    );
 
   if (error) {
     console.error('getOrCreateChatThread error:', error.message, error);
     return null;
   }
-  return data as ChatThread;
+
+  const { data: created, error: readError } = await supabase
+    .from('chat_threads')
+    .select('*')
+    .eq('purchase_id', purchase.id)
+    .maybeSingle();
+
+  if (readError) {
+    console.error('getOrCreateChatThread read error:', readError.message, readError);
+    return null;
+  }
+  return (created as ChatThread) ?? null;
 }
 
 /** ログイン中ユーザーが参加している全スレッド（購入者・クリエイター両方の立場を含む） */
@@ -1472,32 +1486,26 @@ export async function getChatThreads(): Promise<ChatThreadSummary[]> {
   const threads = (data ?? []) as Record<string, unknown>[];
   if (threads.length === 0) return [];
 
-  const threadIds = threads.map((t) => t.id as string);
+  // 最新メッセージと未読数はSQL側で集計する。
+  // 全メッセージを引いてクライアントで畳むと、PostgREST の1000行上限に当たった時点で
+  // 古いスレッドの最新行が取れず、本文も未読バッジも消える。
+  const { data: summaries, error: summaryError } = await supabase.rpc(
+    'get_chat_thread_summaries',
+  );
 
-  // 既読位置と直近メッセージをまとめて取得（スレッドごとのクエリを避ける）
-  const [{ data: reads }, { data: messages }] = await Promise.all([
-    supabase.from('chat_reads').select('thread_id, last_read_at').in('thread_id', threadIds),
-    supabase
-      .from('chat_messages')
-      .select('thread_id, body, created_at, sender_id')
-      .in('thread_id', threadIds)
-      .order('created_at', { ascending: false }),
-  ]);
-
-  const readMap = new Map<string, string>();
-  for (const r of reads ?? []) readMap.set(r.thread_id as string, r.last_read_at as string);
+  if (summaryError) {
+    console.error('getChatThreads summary error:', summaryError.message, summaryError);
+  }
 
   const lastBody = new Map<string, string>();
   const unread = new Map<string, number>();
-  for (const m of messages ?? []) {
-    const tid = m.thread_id as string;
-    if (!lastBody.has(tid)) lastBody.set(tid, m.body as string);
-    // 自分の発言は未読に数えない
-    if (m.sender_id === user.id) continue;
-    const readAt = readMap.get(tid);
-    if (!readAt || new Date(m.created_at as string) > new Date(readAt)) {
-      unread.set(tid, (unread.get(tid) ?? 0) + 1);
-    }
+  for (const row of (summaries ?? []) as {
+    thread_id: string;
+    last_message_body: string | null;
+    unread_count: number;
+  }[]) {
+    if (row.last_message_body) lastBody.set(row.thread_id, row.last_message_body);
+    unread.set(row.thread_id, Number(row.unread_count) || 0);
   }
 
   return threads.map((t) => {
@@ -1583,12 +1591,9 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const { error } = await supabase
-    .from('chat_reads')
-    .upsert(
-      { thread_id: threadId, user_id: user.id, last_read_at: new Date().toISOString() },
-      { onConflict: 'thread_id,user_id' },
-    );
+  // 端末の時計で打つと、比較相手の created_at（サーバ生成）とずれて
+  // 既読/未読が壊れる。時刻はDB側の now() に決めさせる。
+  const { error } = await supabase.rpc('mark_chat_thread_read', { target_thread_id: threadId });
 
   if (error) console.error('markChatThreadRead error:', error.message, error);
 }

@@ -7,21 +7,6 @@
 -- ════════════════════════════════════════════════════════════════
 
 -- ────────────────────────────────────────────────
--- 1. profiles にメールを追加
---    通知(段階3)の宛先。Google ログインで取得した値を保持する。
---    auth.users.email は authenticated から直接読めないため profiles 側に持つ。
--- ────────────────────────────────────────────────
-ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email text;
-
-COMMENT ON COLUMN profiles.email IS 'Googleアカウントのメール。新着メッセージ通知の宛先に使う';
-
--- 既存ユーザー分を auth.users から補完
-UPDATE profiles p
-SET email = u.email
-FROM auth.users u
-WHERE u.id = p.id AND p.email IS DISTINCT FROM u.email;
-
--- ────────────────────────────────────────────────
 -- 2. chat_threads
 --    purchase_id を UNIQUE にして「1購入1スレッド」をDBで保証する
 -- ────────────────────────────────────────────────
@@ -256,10 +241,95 @@ $$;
 REVOKE EXECUTE ON FUNCTION private.shares_chat_with(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION private.shares_chat_with(uuid) TO authenticated;
 
+-- 注意: RLS は行単位でしか絞れないため、このポリシーは profiles の「行全体」を
+-- チャット相手に開放する。したがって profiles には本人以外に見せてはいけない情報
+-- （メールアドレス等）を置かないこと。通知の宛先が必要な処理は、
+-- サービスロールでサーバ側から auth.users を読むこと。
+-- 列を追加するときは必ずこのポリシーの影響を確認する。
 CREATE POLICY "profiles_select_chat_partner"
   ON profiles FOR SELECT
   TO authenticated
   USING ((SELECT private.shares_chat_with(id)));
+
+-- ────────────────────────────────────────────────
+-- 8-c. 一覧用の集計RPC
+--   スレッドごとの「最新メッセージ」と「未読数」をSQL側で解決する。
+--   クライアントで全メッセージを引いて畳む方式だと、PostgRESTの1000行上限に
+--   当たった時点で古いスレッドの最新行が取れず、未読バッジも本文も消える。
+-- ────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.get_chat_thread_summaries()
+RETURNS TABLE (
+  thread_id uuid,
+  last_message_body text,
+  last_message_at timestamptz,
+  unread_count bigint
+)
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = ''
+AS $$
+  WITH me AS (SELECT (SELECT auth.uid()) AS uid),
+  mine AS (
+    SELECT t.id
+    FROM public.chat_threads t, me
+    WHERE me.uid IN (t.buyer_id, t.creator_id)
+  ),
+  latest AS (
+    -- スレッドごとの最新1件だけを取る
+    SELECT DISTINCT ON (m.thread_id) m.thread_id, m.body, m.created_at
+    FROM public.chat_messages m
+    JOIN mine ON mine.id = m.thread_id
+    ORDER BY m.thread_id, m.created_at DESC
+  ),
+  unread AS (
+    SELECT m.thread_id, count(*) AS cnt
+    FROM public.chat_messages m
+    JOIN mine ON mine.id = m.thread_id
+    CROSS JOIN me
+    LEFT JOIN public.chat_reads r ON r.thread_id = m.thread_id AND r.user_id = me.uid
+    WHERE m.sender_id <> me.uid
+      AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
+    GROUP BY m.thread_id
+  )
+  SELECT mine.id, latest.body, latest.created_at, COALESCE(unread.cnt, 0)
+  FROM mine
+  LEFT JOIN latest ON latest.thread_id = mine.id
+  LEFT JOIN unread ON unread.thread_id = mine.id;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.get_chat_thread_summaries() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_chat_thread_summaries() TO authenticated;
+
+-- ────────────────────────────────────────────────
+-- 8-d. 既読位置の更新（サーバ時刻で打つ）
+--   クライアントの時計がずれていると、比較対象の created_at（サーバ生成）と
+--   食い違って既読/未読が壊れるため、時刻はDB側で決める。
+-- ────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.mark_chat_thread_read(target_thread_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  -- 参加者でなければ何もしない（他人のスレッドを既読にできないようにする）
+  IF NOT EXISTS (
+    SELECT 1 FROM public.chat_threads t
+    WHERE t.id = target_thread_id
+      AND (SELECT auth.uid()) IN (t.buyer_id, t.creator_id)
+  ) THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO public.chat_reads (thread_id, user_id, last_read_at)
+  VALUES (target_thread_id, (SELECT auth.uid()), now())
+  ON CONFLICT (thread_id, user_id) DO UPDATE SET last_read_at = now();
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.mark_chat_thread_read(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mark_chat_thread_read(uuid) TO authenticated;
 
 -- ────────────────────────────────────────────────
 -- 9. Realtime 配信を有効化
