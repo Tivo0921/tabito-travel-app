@@ -27,14 +27,15 @@ export async function GET(request: Request) {
           },
           { onConflict: 'id', ignoreDuplicates: true },
         );
-        // profiles が無いと購入もプロフィール表示もできない。
-        // 握り潰すと「ログイン済みなのに何も動かない」状態になるため、
-        // ログイン失敗として扱い、やり直せるようにする。
+        // profiles が無いと購入もプロフィール表示もできない。握り潰すと
+        // 「ログイン済みなのに何も動かない」状態になるので、必ず表に出す。
+        //
+        // ただしセッションは成立しているので「ログインに失敗」ではない。
+        // 汎用のログインエラーに混ぜると原因が分からなくなるため、
+        // 専用の理由コードを渡して個別の文言と再試行導線を出す。
         if (profileError) {
           console.error('Profile creation failed:', profileError.code, profileError.message);
-          return NextResponse.redirect(
-            `${origin}/login?error=profile_failed&code=${encodeURIComponent(profileError.code ?? 'unknown')}`,
-          );
+          return NextResponse.redirect(`${origin}/login?error=profile_failed`);
         }
       }
       return NextResponse.redirect(`${origin}${next}`);

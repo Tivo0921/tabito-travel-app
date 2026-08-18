@@ -1494,7 +1494,11 @@ export async function getChatThreads(): Promise<ChatThreadSummary[]> {
   );
 
   if (summaryError) {
+    // ここで握り潰すと、最新メッセージも未読数も無い状態のまま一覧が描かれ、
+    // 全スレッドが「まだ会話が無い」ように見えてしまう。
+    // マイグレーション未適用時にちょうどこれが起きるので、必ず表に出す。
     console.error('getChatThreads summary error:', summaryError.message, summaryError);
+    throw new Error(`chat summary unavailable: ${summaryError.message}`);
   }
 
   const lastBody = new Map<string, string>();
@@ -1600,8 +1604,15 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
 
 /** ナビに出す全スレッド合計の未読数 */
 export async function getTotalUnreadCount(): Promise<number> {
-  const threads = await getChatThreads();
-  return threads.reduce((sum, t) => sum + t.unread_count, 0);
+  // ナビのバッジ用。取得できないときはバッジを出さないだけで、
+  // 呼び出し元を巻き込まない（一覧側では別途エラーを出している）。
+  try {
+    const threads = await getChatThreads();
+    return threads.reduce((sum, t) => sum + t.unread_count, 0);
+  } catch (e) {
+    console.error('getTotalUnreadCount error:', e);
+    return 0;
+  }
 }
 
 /**

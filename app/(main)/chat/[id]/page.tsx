@@ -44,6 +44,10 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(false);
+  // 購読が張れていない状態を黙って放置しない。
+  // anon で購読されて配信が止まった不具合は「ただ更新されない」形でしか出ず、
+  // 検知手段が無かった。
+  const [realtimeDown, setRealtimeDown] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -88,7 +92,10 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
             markChatThreadRead(id);
           },
         )
-        .subscribe();
+        .subscribe((status) => {
+          // SUBSCRIBED 以外は配信が来ない。復帰したら消す。
+          setRealtimeDown(status !== 'SUBSCRIBED');
+        });
     });
 
     return () => {
@@ -185,6 +192,10 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
 
       {error && (
         <p className="px-5 pb-2 text-sm text-red-600">{t('chat.loadFailed')}</p>
+      )}
+
+      {realtimeDown && (
+        <p className="px-5 pb-2 text-sm text-[var(--text-sub)]">{t('chat.realtimeDown')}</p>
       )}
 
       {/* 入力欄: 詳細ページでは BottomNav が消えるので、その分の余白は取らない */}

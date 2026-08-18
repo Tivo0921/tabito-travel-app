@@ -100,6 +100,8 @@ export const ja = {
   'chat.aboutPackage': '「{title}」について',
   'chat.readOnly': 'このチャットは終了しました。閲覧のみ可能です',
   'chat.startPrompt': 'メッセージを送ってみましょう',
+  'chat.listFailed': 'メッセージ一覧を読み込めませんでした。時間をおいて再度お試しください',
+  'chat.realtimeDown': '新着の自動受信が止まっています。画面を再読み込みしてください',
   'chat.openFailed': 'チャットを開けませんでした。通信状況を確認してもう一度お試しください',
 
   // 計画
@@ -237,6 +239,7 @@ export const ja = {
   'login.processing': '処理中...',
   'login.or': 'または',
   'login.guest': 'ログインせずに見てみる',
+  'login.profileFailed': 'アカウント情報の作成に失敗しました。もう一度ログインしてください。続く場合はサポートへご連絡ください',
   'login.failed': 'ログインに失敗しました。もう一度お試しください。',
   'login.terms': '利用規約',
   'login.privacy': 'プライバシーポリシー',

@@ -96,6 +96,8 @@ export const en: Record<TranslationKey, string> = {
   'chat.aboutPackage': 'About "{title}"',
   'chat.readOnly': 'This chat has ended. You can still read it',
   'chat.startPrompt': 'Send a message to get started',
+  'chat.listFailed': 'We could not load your messages. Please try again in a moment.',
+  'chat.realtimeDown': 'Live updates are not connected. Reload the page to see new messages.',
   'chat.openFailed': 'Could not open the chat. Check your connection and try again',
 
   // Plan
@@ -233,6 +235,7 @@ export const en: Record<TranslationKey, string> = {
   'login.processing': 'Processing...',
   'login.or': 'or',
   'login.guest': 'Look around without logging in',
+  'login.profileFailed': 'We could not finish setting up your account. Please log in again, or contact support if this continues.',
   'login.failed': 'Login failed. Please try again.',
   'login.terms': 'Terms of Service',
   'login.privacy': 'Privacy Policy',

@@ -14,6 +14,7 @@ export default function ChatListPage() {
   const [threads, setThreads] = useState<ChatListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [openError, setOpenError] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [opening, setOpening] = useState<string | null>(null);
 
   // クリエイターは同じパッケージについて購入者ごとに別スレッドを持つため、
@@ -23,7 +24,12 @@ export default function ChatListPage() {
 
   useEffect(() => {
     getChatListItems()
-      .then(setThreads)
+      .then((items) => {
+        setThreads(items);
+        setLoadError(false);
+      })
+      // 失敗を黙って空扱いにすると「会話が無い」と誤解される
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, []);
 
@@ -60,6 +66,10 @@ export default function ChatListPage() {
 
       {loading ? (
         <p className="px-5 py-12 text-center text-[var(--muted)]">{t('common.loading')}</p>
+      ) : loadError ? (
+        <p className="mx-5 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+          {t('chat.listFailed')}
+        </p>
       ) : threads.length === 0 ? (
         <div className="px-5 py-16 text-center">
           <MessageCircle className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />

@@ -96,6 +96,8 @@ export const ko: Record<TranslationKey, string> = {
   'chat.aboutPackage': '「{title}」에 대해',
   'chat.readOnly': '종료된 채팅입니다. 읽기만 가능합니다',
   'chat.startPrompt': '메시지를 보내 대화를 시작해 보세요',
+  'chat.listFailed': '메시지 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요',
+  'chat.realtimeDown': '실시간 수신이 끊겼습니다. 페이지를 새로고침해 주세요',
   'chat.openFailed': '채팅을 열지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
 
   // 일정
@@ -233,6 +235,7 @@ export const ko: Record<TranslationKey, string> = {
   'login.processing': '처리 중...',
   'login.or': '또는',
   'login.guest': '로그인 없이 둘러보기',
+  'login.profileFailed': '계정 정보 생성에 실패했습니다. 다시 로그인해 주세요. 계속되면 지원팀에 문의해 주세요',
   'login.failed': '로그인에 실패했습니다. 다시 시도해 주세요.',
   'login.terms': '이용약관',
   'login.privacy': '개인정보처리방침',
