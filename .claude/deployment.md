@@ -41,25 +41,104 @@
 
 ## 標準の開発フロー
 
-開発段階では `staging` に push して stg でレビューし、本番に出して良いと確認できた分だけ
-`main` へ上げる。これを既定の進め方とする。
+**機能ブランチ → PR → `staging` → stgでユーザーテスト → `main`（本番）** の4段構え。
+`staging` は「テストユーザーに触ってもらう場」であり、直接コミットする場所ではない。
 
-1. `staging` で開発する
-2. `npx tsc --noEmit` を通す（CI と同じ検査。落ちると CI が赤くなる）
-3. `staging` に push → 自動で https://stg.tabito.site が更新される
-4. **stg で実物をレビューする。** 修正が要れば 1 に戻る（何度 push しても本番には影響しない）
-5. 本番に出して良いと判断できたら `staging` → `main` の PR を作る
-6. **マージ＝即本番公開。** ここだけが不可逆なので、必ずユーザーの明示的な判断を仰ぐ
+```
+feat/xxx ──PR──> staging ──(ユーザーテスト)──> PR ──> main
+                    │                                  │
+              stg.tabito.site                    tabito.site
+```
+
+### 1. 機能ブランチを切る
+
+```bash
+git fetch origin
+git checkout -b feat/xxx origin/staging   # 必ず origin/staging から切る
+```
+
+**`origin/` を付けること。** ローカルの `main` / `staging` は放置すると古くなる。
+過去に `git push origin main:staging` としてローカルの古い `main`（数ヶ月前）を
+push してしまい、staging を巻き戻した事故がある。
+
+### 2. 実装して push
+
+```bash
+npx tsc --noEmit          # CIと同じ検査。落ちるとCIが赤くなる
+git push -u origin feat/xxx
+```
+
+### 3. PR を作る（宛先は必ず `staging`）
+
+```bash
+gh pr create --base staging --head feat/xxx
+```
+
+**`--base main` にしない。** 付け忘れるとデフォルトが `main` になり、
+マージした瞬間に本番公開される。作成後に `gh pr view <n> --json baseRefName` で確認する。
+
+**機能ごとに分ける。** 多言語化・チャット・アカウント まわりは別PRにする。
+依存がある場合はスタックする（例: チャットPRの base を i18n PR のブランチにする）。
+先行PRがマージされたら、後続PRの base を `staging` に付け替える。
+
+### 4. レビュー → `staging` にマージ → stg で確認
+
+マージすると https://stg.tabito.site に自動デプロイされる。ここでテストユーザーに触ってもらう。
+**本番には影響しないので、何度でもやり直せる。**
+
+### 5. 本番へ（`staging` → `main`）
+
+```bash
+gh pr create --base main --head staging
+```
+
+**マージ＝即本番公開。承認ステップは無い。** 必ずユーザーの明示的な判断を仰ぐ。
+
+## DBマイグレーションを含む場合（重要）
+
+**CI もVercel もマイグレーションを適用しない。** コードだけが先に出ると、
+テーブルが無い状態で参照して 500 になる。
+
+**PRをマージする前に**、対象環境の Supabase へ手で適用する:
+
+| マージ先 | 対象のSupabase | project-ref |
+|---|---|---|
+| `staging` | stg (`TABITO-stg`) | `oqtvjmongyuyaoqckdyy` |
+| `main` | **本番** (`TABITO`) | `toyzerxkavsgomcbgujj` |
+
+```bash
+supabase link --project-ref oqtvjmongyuyaoqckdyy   # stg の例
+supabase db push
+```
+
+**link 先を必ず確認してから push する。** 取り違えると本番DBにスキーマ変更が入る。
+`supabase projects list` で現在のリンク先を確かめられる。
+
+`supabase/seed.sql` は `supabase db reset`（ローカル）専用で、本番には流れない。
 
 ## 作業時のルール
 
-- **通常の作業ブランチは `staging`。** ここへの push は stg にしか出ないので安全
-- `main` への直接 push は禁止。必ず `staging` → `main` の PR 経由にする
+- `main` への直接 push は禁止。`staging` への直接 push も避け、PR を経由する
 - コミット・push はユーザーから明示的に依頼された時だけ行う
 - 本番向けの操作（main へのマージ、本番デプロイ）は勝手に実行せず必ず確認を取る
-- 未完成の機能を staging に置くのは問題ないが、**main へ上げる時は
-  「中途半端な状態で本番公開されないか」を必ず点検する**
+- `main` へ上げる時は **「中途半端な状態で本番公開されないか」を必ず点検する**
   （例: UI多言語化が一部画面のみの状態で本番へ出た前例がある）
+- 作業前に `git fetch origin` してブランチの位置を確認する。
+  ローカルの `main` / `staging` は明示的に追従させないとずれる:
+  ```bash
+  git branch -f main origin/main
+  git branch -f staging origin/staging
+  ```
+
+## つまずいた時
+
+| 症状 | 原因と対処 |
+|---|---|
+| PRの差分が異常に大きい | base がずれている。`gh pr edit <n> --base staging` で付け替え、数分待つと再計算される |
+| PRの宛先が `main` になっている | `gh pr create` で `--base` を付け忘れた。`gh pr edit` で修正 |
+| 先行PRをマージしたら後続PRが宙に浮いた | 後続の base を `staging` に付け替え、`git merge origin/staging` で最新を取り込む |
+| stg でチャット等が500 | マイグレーション未適用。`supabase db push` |
+| ローカルブランチが古い | `git fetch origin` → `git branch -f <name> origin/<name>` |
 
 ## 環境変数
 

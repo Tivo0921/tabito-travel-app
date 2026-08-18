@@ -8,8 +8,12 @@
 
 特に重要な点だけ再掲する:
 
-- `staging` に push → stg (https://stg.tabito.site) に自動デプロイ
-- **`main` へのマージ＝即本番公開**（https://tabito.site）。承認や手動実行のステップは無い
+- **機能ブランチ → PR → `staging` → stgでユーザーテスト → `main`（本番）** の4段構え
+- 機能ブランチは必ず `origin/staging` から切る（ローカルの `main`/`staging` は古くなる）
+- PR は `--base staging` を明示する。**付け忘れると `main` 向きになり、マージ＝即本番公開**
+- PR は機能ごとに分ける（多言語化・チャット・アカウントなど）
+- **DBマイグレーションを含むPRは、マージ前に対象環境へ `supabase db push` が必要。**
+  CI もVercel も適用しないため、忘れるとコードだけ出て500になる
 - GitHub Actions はデプロイしない。`npx tsc --noEmit` のみ実行する
 
 `main` への直接 push は禁止。本番に影響する操作は必ずユーザーの確認を取る。
