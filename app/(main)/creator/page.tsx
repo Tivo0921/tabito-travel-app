@@ -45,6 +45,7 @@ export default function CreatorPage() {
   const router = useRouter();
   const [guide, setGuide] = useState<Guide | null>(null);
   const [packages, setPackages] = useState<CreatorPackage[]>([]);
+  const [actionError, setActionError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
@@ -75,13 +76,18 @@ export default function CreatorPage() {
 
   const handleDelete = async (pkgId: string) => {
     if (!confirm(t('creator.confirmDelete'))) return;
-    await deleteCreatorPackage(pkgId);
+    // 楽観的に消すと、失敗しても消えたように見える
+    const ok = await deleteCreatorPackage(pkgId);
+    if (!ok) return setActionError(true);
+    setActionError(false);
     setPackages((prev) => prev.filter((p) => p.id !== pkgId));
   };
 
   const handleToggleStatus = async (pkgId: string, currentStatus: string) => {
     const next = currentStatus === 'published' ? 'draft' : 'published';
-    await setPackageStatus(pkgId, next);
+    const ok = await setPackageStatus(pkgId, next);
+    if (!ok) return setActionError(true);
+    setActionError(false);
     setPackages((prev) =>
       prev.map((p) => p.id === pkgId ? { ...p, status: next } : p)
     );
@@ -208,6 +214,12 @@ export default function CreatorPage() {
                 {t('creator.list.new')}
               </Link>
             </div>
+
+            {actionError && (
+              <p className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                {t('creator.actionFailed')}
+              </p>
+            )}
 
             {packages.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-2xl shadow-sm">
