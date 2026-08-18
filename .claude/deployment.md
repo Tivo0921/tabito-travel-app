@@ -101,13 +101,18 @@ gh pr create --base main --head staging
 
 **PRをマージする前に**、対象環境の Supabase へ手で適用する:
 
+| マージ先 | 対象のSupabase | project-ref |
+|---|---|---|
+| `staging` | stg (`TABITO-stg`) | `oqtvjmongyuyaoqckdyy` |
+| `main` | **本番** (`TABITO`) | `toyzerxkavsgomcbgujj` |
+
 ```bash
-supabase link --project-ref <対象のproject-ref>
+supabase link --project-ref oqtvjmongyuyaoqckdyy   # stg の例
 supabase db push
 ```
 
-- `staging` にマージする前 → **stg のSupabase** に適用
-- `main` にマージする前 → **本番のSupabase** に適用
+**link 先を必ず確認してから push する。** 取り違えると本番DBにスキーマ変更が入る。
+`supabase projects list` で現在のリンク先を確かめられる。
 
 `supabase/seed.sql` は `supabase db reset`（ローカル）専用で、本番には流れない。
 
