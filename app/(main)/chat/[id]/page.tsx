@@ -12,6 +12,7 @@ import {
 } from '@/lib/supabase/queries';
 import { useT } from '@/lib/i18n/provider';
 import { cn } from '@/lib/utils';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { ChatThread, ChatMessage } from '@/lib/types';
 
 /**
@@ -23,7 +24,13 @@ import type { ChatThread, ChatMessage } from '@/lib/types';
 function mergeMessages(a: ChatMessage[], b: ChatMessage[]): ChatMessage[] {
   const byId = new Map<string, ChatMessage>();
   for (const m of [...a, ...b]) byId.set(m.id, m);
-  return [...byId.values()].sort((x, y) => x.created_at.localeCompare(y.created_at));
+  // 文字列比較は使えない。同じ時刻でも取得経路で表記が違うため:
+  //   PostgREST → '2026-08-18T11:45:20+00:00'（区切りが T）
+  //   Realtime  → '2026-08-18 11:45:20+00'   （区切りが半角スペース）
+  // スペース(0x20) < 'T'(0x54) なので、後から届いた新着が先頭に並んでしまう。
+  return [...byId.values()].sort(
+    (x, y) => Date.parse(x.created_at) - Date.parse(y.created_at),
+  );
 }
 
 export default function ChatThreadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -55,25 +62,38 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
       .finally(() => setLoading(false));
   }, [id]);
 
-  // 相手の新着をリアルタイムで受け取る。配信対象にもRLSが効くので他人の分は届かない。
+  // 相手の新着をリアルタイムで受け取る。
+  // 購読は「セッションを Realtime クライアントに載せてから」開始する。
+  // 先に subscribe すると anon として接続され、chat_messages の
+  // RLS（参加者のみ）を通過できず INSERT が一切配信されない。
+  // セッション復元と購読の競合になるため、間に合った時だけ動く不安定な状態になる。
   useEffect(() => {
     const supabase = createClient();
-    const channel = supabase
-      .channel(`chat:${id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `thread_id=eq.${id}` },
-        (payload) => {
-          const incoming = payload.new as ChatMessage;
-          // 自分の送信は楽観更新で既に入っているので mergeMessages が吸収する
-          setMessages((prev) => mergeMessages(prev, [incoming]));
-          markChatThreadRead(id);
-        }
-      )
-      .subscribe();
+    let channel: RealtimeChannel | null = null;
+    let cancelled = false;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      if (session) supabase.realtime.setAuth(session.access_token);
+
+      channel = supabase
+        .channel(`chat:${id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `thread_id=eq.${id}` },
+          (payload) => {
+            const incoming = payload.new as ChatMessage;
+            // 自分の送信は楽観更新で既に入っているので mergeMessages が吸収する
+            setMessages((prev) => mergeMessages(prev, [incoming]));
+            markChatThreadRead(id);
+          },
+        )
+        .subscribe();
+    });
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (channel) supabase.removeChannel(channel);
     };
   }, [id]);
 
@@ -137,7 +157,9 @@ export default function ChatThreadPage({ params }: { params: Promise<{ id: strin
         </button>
       </header>
 
-      <div className="flex-1 px-5 py-4 space-y-3">
+      {/* min-h-0 が無いと flex アイテムが縮まず overflow が効かない。
+          高さを h-[100dvh] で固定しているので、ここでスクロールさせる。 */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
         {messages.length === 0 && (
           <p className="text-center text-sm text-[var(--muted)] py-12">{t('chat.noMessages')}</p>
         )}
