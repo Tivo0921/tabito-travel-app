@@ -492,8 +492,8 @@ export const ko: Record<TranslationKey, string> = {
 
   // 소요 시간 (DB에는 분으로 저장하고 표시할 때 정리)
   'duration.days': '{count}일',
-  'duration.halfDay': '반나절',
   'duration.hours': '{count}시간',
+  'duration.hoursMinutes': '{hours} {minutes}',
   'duration.minutes': '{count}분',
   // 단수형 (한국어는 단복수를 구분하지 않아 복수형과 동일)
   'common.readTime_one': '{count}분이면 읽어요',

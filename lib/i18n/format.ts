@@ -6,14 +6,26 @@ type Translate = (key: TranslationKey, vars?: Record<string, string | number>) =
 /**
  * 所要時間の表示。
  * DBには分で持ち、表示のときに言語へ合わせて整形する。
- * データ層で「半日」のような日本語に畳んでしまうと他言語で崩れ、
+ * データ層で日本語に畳んでしまうと他言語で崩れ、
  * 逆算（parseInt）もできなくなるため、整形はここに集約する。
+ *
+ * 日単位で出すのは480分(=1日)ちょうどの倍数のときだけ。それ以外は
+ * 「半日」のような曖昧な括りにせず、7時間を「半日」と呼ぶような実態との
+ * ズレを避けて時間・分で出す。
  */
 export function formatDuration(minutes: number | null | undefined, t: Translate): string {
   if (!minutes) return '';
-  if (minutes >= 480) return t('duration.days', { count: Math.round(minutes / 480) });
-  if (minutes >= 240) return t('duration.halfDay');
-  if (minutes >= 60 && minutes % 60 === 0) return t('duration.hours', { count: minutes / 60 });
+  // 日で言えるのは480分(=1日)ちょうどの倍数のときだけ。
+  // Math.round で丸めると720分(12時間)が「2日」、600分(10時間)が「1日」になり、
+  // 「半日」をやめた意味が無くなる。端数がある分は下の時間表示に落とす。
+  if (minutes % 480 === 0) return t('duration.days', { count: minutes / 480 });
+  if (minutes >= 60) {
+    const hours = t('duration.hours', { count: Math.floor(minutes / 60) });
+    const rest = minutes % 60;
+    if (rest === 0) return hours;
+    // 「7時間30分」。時・分それぞれ t() を通すので英語の単複もそのまま効く
+    return t('duration.hoursMinutes', { hours, minutes: t('duration.minutes', { count: rest }) });
+  }
   return t('duration.minutes', { count: minutes });
 }
 

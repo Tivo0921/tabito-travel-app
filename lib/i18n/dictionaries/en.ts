@@ -492,8 +492,8 @@ export const en: Record<TranslationKey, string> = {
 
   // Duration (stored as minutes; formatted at render time)
   'duration.days': '{count} days',
-  'duration.halfDay': 'Half day',
   'duration.hours': '{count} hours',
+  'duration.hoursMinutes': '{hours} {minutes}',
   'duration.minutes': '{count} min',
   // Singular forms
   'common.readTime_one': '{count} min read',
