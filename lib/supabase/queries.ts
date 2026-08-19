@@ -946,28 +946,38 @@ export async function getMyGuideProfile(): Promise<Guide | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // maybeSingle() は該当2件以上でエラーになる。guides.user_id に UNIQUE が無く
+  // 1ユーザーが複数行を持ち得るため、それだと登録済みでも null が返り、
+  // 画面が「未登録」と判断して登録フォームを出し続ける（登録するたび行が増える）。
+  // 最古の1件を代表として返す。#12
   const { data, error } = await supabase
     .from('guides')
     .select('*, guide_translations(name, bio)')
     .eq('user_id', user.id)
-    .maybeSingle();
+    .order('created_at', { ascending: true })
+    .limit(1);
 
-  if (error || !data) return null;
+  if (error) {
+    console.error('getMyGuideProfile error:', error.message, error);
+    return null;
+  }
+  const row = data?.[0];
+  if (!row) return null;
 
-  const t = Array.isArray(data.guide_translations)
-    ? data.guide_translations[0]
-    : data.guide_translations;
+  const t = Array.isArray(row.guide_translations)
+    ? row.guide_translations[0]
+    : row.guide_translations;
 
   return {
-    id: data.id,
-    user_id: data.user_id ?? undefined,
+    id: row.id,
+    user_id: row.user_id ?? undefined,
     name: t?.name ?? '',
     bio: t?.bio ?? '',
-    avatar_url: data.avatar_url ?? '',
-    location: data.location,
-    languages: data.languages,
-    rating: Number(data.rating),
-    review_count: data.review_count,
+    avatar_url: row.avatar_url ?? '',
+    location: row.location,
+    languages: row.languages,
+    rating: Number(row.rating),
+    review_count: row.review_count,
   };
 }
 
@@ -979,6 +989,11 @@ export async function registerAsGuide(
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // 既に登録済みなら作らない。無条件に insert すると、表示側が詰まって
+  // 登録フォームが出続けたときに行が際限なく増える。#12
+  const existing = await getMyGuideProfile();
+  if (existing) return existing;
 
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
 
@@ -1021,7 +1036,13 @@ export async function registerAsGuide(
 
 export async function getMyCreatorPackages(): Promise<Package[]> {
   const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
 
+  // 自分のガイドのものだけ返す。
+  // packages の SELECT ポリシーは公開コンテンツを全員に開放しているので、
+  // ここで絞らないと他人のパッケージまで管理画面に並び、統計にも数えられ、
+  // そこから編集画面に入れてしまう。
   const { data, error } = await supabase
     .from('packages')
     .select(`
@@ -1031,6 +1052,7 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
       package_translations(title, description, short_description),
       guides!inner(id, user_id)
     `)
+    .eq('guides.user_id', user.id)
     .order('created_at', { ascending: false });
 
   if (error || !data) {
@@ -1124,50 +1146,90 @@ export async function updateCreatorPackage(
   categoryId: string,
   imageUrl: string,
   durationMinutes: number | null,
-): Promise<void> {
+): Promise<boolean> {
   const supabase = createClient();
 
-  await supabase.from('packages').update({
+  // RLS に弾かれても HTTP 200 / 0件 が返るだけでエラーにならない。
+  // .select() で影響行を受け取り、0件なら失敗として扱う。
+  // これをしないと他人のパッケージを編集して「保存済み ✓」が出てしまう。
+  const { data, error } = await supabase.from('packages').update({
     area_id: areaId,
     price,
     category_id: categoryId || null,
     image_url: imageUrl || null,
     duration_minutes: durationMinutes,
-  }).eq('id', packageId);
+  }).eq('id', packageId).select('id');
 
-  await supabase.from('package_translations').upsert({
+  if (error || !data || data.length === 0) {
+    console.error('updateCreatorPackage failed:', error?.message ?? '0 rows affected');
+    return false;
+  }
+
+  const { error: tError } = await supabase.from('package_translations').upsert({
     package_id: packageId,
     language: 'ja',
     title,
     short_description: shortDescription,
     description,
   }, { onConflict: 'package_id,language' });
+
+  if (tError) {
+    console.error('updateCreatorPackage translation failed:', tError.message);
+    return false;
+  }
+  return true;
 }
 
 export async function setPackageStatus(
   packageId: string,
   status: 'draft' | 'published',
-): Promise<void> {
+): Promise<boolean> {
   const supabase = createClient();
-  await supabase.from('packages').update({ status }).eq('id', packageId);
+  const { data, error } = await supabase
+    .from('packages')
+    .update({ status })
+    .eq('id', packageId)
+    .select('id');
+  if (error || !data || data.length === 0) {
+    console.error('setPackageStatus failed:', error?.message ?? '0 rows affected');
+    return false;
+  }
+  return true;
 }
 
-export async function deleteCreatorPackage(packageId: string): Promise<void> {
+export async function deleteCreatorPackage(packageId: string): Promise<boolean> {
   const supabase = createClient();
-  await supabase.from('packages').delete().eq('id', packageId);
+  // 削除も RLS に弾かれると 204 / 0件 で返る。消えたかを確認する。
+  const { data, error } = await supabase
+    .from('packages')
+    .delete()
+    .eq('id', packageId)
+    .select('id');
+  if (error || !data || data.length === 0) {
+    console.error('deleteCreatorPackage failed:', error?.message ?? '0 rows affected');
+    return false;
+  }
+  return true;
 }
 
+/**
+ * 編集画面用の取得。**自分のガイドのパッケージでなければ null を返す。**
+ * URLを直接開かれても他人のコンテンツをフォームに載せないための防御。
+ */
 export async function getCreatorPackageWithSpots(
   packageId: string,
 ): Promise<{ pkg: (Package & { status: string }) | null; spots: Spot[] }> {
   const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { pkg: null, spots: [] };
 
   const [pkgResult, spotsResult] = await Promise.all([
     supabase
       .from('packages')
-      .select(`*, areas(name), categories(name), package_translations(title, description, short_description)`)
+      .select(`*, areas(name), categories(name), package_translations(title, description, short_description), guides!inner(user_id)`)
       .eq('id', packageId)
-      .single(),
+      .eq('guides.user_id', user.id)
+      .maybeSingle(),
     supabase
       .from('spots')
       .select(`
@@ -1179,7 +1241,12 @@ export async function getCreatorPackageWithSpots(
       .order('order', { ascending: true }),
   ]);
 
-  if (pkgResult.error || !pkgResult.data) return { pkg: null, spots: [] };
+  if (pkgResult.error) {
+    console.error('getCreatorPackageWithSpots error:', pkgResult.error.message, pkgResult.error);
+    return { pkg: null, spots: [] };
+  }
+  // 他人のパッケージ、または存在しないIDのとき
+  if (!pkgResult.data) return { pkg: null, spots: [] };
 
   const row = pkgResult.data;
   const t = Array.isArray(row.package_translations)
@@ -1362,14 +1429,19 @@ export async function updateCreatorSpot(
 export async function deleteCreatorSpot(
   spotId: string,
   packageId: string,
-): Promise<void> {
+): Promise<boolean> {
   const supabase = createClient();
-  await supabase.from('spots').delete().eq('id', spotId);
+  const { data, error } = await supabase.from('spots').delete().eq('id', spotId).select('id');
+  if (error || !data || data.length === 0) {
+    console.error('deleteCreatorSpot failed:', error?.message ?? '0 rows affected');
+    return false;
+  }
   const { count } = await supabase
     .from('spots')
     .select('id', { count: 'exact', head: true })
     .eq('package_id', packageId);
   await supabase.from('packages').update({ spot_count: count ?? 0 }).eq('id', packageId);
+  return true;
 }
 
 // ────────────────────────────────────────────────
