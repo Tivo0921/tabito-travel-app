@@ -946,28 +946,38 @@ export async function getMyGuideProfile(): Promise<Guide | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // maybeSingle() は該当2件以上でエラーになる。guides.user_id に UNIQUE が無く
+  // 1ユーザーが複数行を持ち得るため、それだと登録済みでも null が返り、
+  // 画面が「未登録」と判断して登録フォームを出し続ける（登録するたび行が増える）。
+  // 最古の1件を代表として返す。#12
   const { data, error } = await supabase
     .from('guides')
     .select('*, guide_translations(name, bio)')
     .eq('user_id', user.id)
-    .maybeSingle();
+    .order('created_at', { ascending: true })
+    .limit(1);
 
-  if (error || !data) return null;
+  if (error) {
+    console.error('getMyGuideProfile error:', error.message, error);
+    return null;
+  }
+  const row = data?.[0];
+  if (!row) return null;
 
-  const t = Array.isArray(data.guide_translations)
-    ? data.guide_translations[0]
-    : data.guide_translations;
+  const t = Array.isArray(row.guide_translations)
+    ? row.guide_translations[0]
+    : row.guide_translations;
 
   return {
-    id: data.id,
-    user_id: data.user_id ?? undefined,
+    id: row.id,
+    user_id: row.user_id ?? undefined,
     name: t?.name ?? '',
     bio: t?.bio ?? '',
-    avatar_url: data.avatar_url ?? '',
-    location: data.location,
-    languages: data.languages,
-    rating: Number(data.rating),
-    review_count: data.review_count,
+    avatar_url: row.avatar_url ?? '',
+    location: row.location,
+    languages: row.languages,
+    rating: Number(row.rating),
+    review_count: row.review_count,
   };
 }
 
@@ -979,6 +989,11 @@ export async function registerAsGuide(
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // 既に登録済みなら作らない。無条件に insert すると、表示側が詰まって
+  // 登録フォームが出続けたときに行が際限なく増える。#12
+  const existing = await getMyGuideProfile();
+  if (existing) return existing;
 
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
 
