@@ -72,6 +72,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [durationHours, setDurationHours] = useState('');
   const [infoSaved, setInfoSaved] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   // スポット一覧
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -84,6 +85,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
 
   const [publishing, setPublishing] = useState(false);
   const [loading, setLoading] = useState(!isNew);
+  const [notFound, setNotFound] = useState(false);
 
   const loadPackage = useCallback(async (pkgId: string) => {
     const { pkg, spots: s } = await getCreatorPackageWithSpots(pkgId);
@@ -100,6 +102,10 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       setDurationHours(p.duration_minutes ? String(p.duration_minutes / 60) : '');
       setStatus(p.status as 'draft' | 'published');
       setInfoSaved(true);
+    } else {
+      // 自分のものでない、または存在しないID。
+      // 空のフォームを出すと新規作成と見分けが付かないので明示する。
+      setNotFound(true);
     }
     setSpots(s);
   }, []);
@@ -132,14 +138,19 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       const newId = await createCreatorPackage(
         guideId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin,
       );
+      // 新規作成も同じ扱い。guide が未指定/他人のものだと insert が弾かれるので、
+      // 何も起きないまま放置しない
+      setInfoSaved(!!newId);
+      setSaveError(!newId);
       if (newId) {
         setPackageId(newId);
-        setInfoSaved(true);
         router.replace(`/creator/package/${newId}`);
       }
     } else {
-      await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
-      setInfoSaved(true);
+      // 失敗を「保存済み ✓」で覆い隠さない
+      const ok = await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
+      setInfoSaved(ok);
+      setSaveError(!ok);
     }
     setSavingInfo(false);
   };
@@ -193,7 +204,10 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
 
   const handleDeleteSpot = async (spotId: string) => {
     if (!packageId || !confirm(t('pkgEdit.confirmDeleteSpot'))) return;
-    await deleteCreatorSpot(spotId, packageId);
+    const ok = await deleteCreatorSpot(spotId, packageId);
+    // 成功時にクリアしないと、一度失敗したバナーが以降ずっと残る
+    setSaveError(!ok);
+    if (!ok) return;
     setSpots((prev) => prev.filter((s) => s.id !== spotId));
   };
 
@@ -201,8 +215,9 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     if (!packageId) return;
     setPublishing(true);
     const next = status === 'published' ? 'draft' : 'published';
-    await setPackageStatus(packageId, next);
-    setStatus(next);
+    const ok = await setPackageStatus(packageId, next);
+    if (ok) setStatus(next);
+    setSaveError(!ok);
     setPublishing(false);
   };
 
@@ -231,6 +246,20 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-[var(--muted)]">{t('common.loading')}</p>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+        <p className="text-[var(--muted)]">{t('pkgEdit.notFound')}</p>
+        <button
+          onClick={() => router.push('/creator')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+        >
+          {t('creator.title')}
+        </button>
       </div>
     );
   }
@@ -264,6 +293,11 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             <h2 className="font-semibold text-[var(--text-main)]">{t('pkgEdit.basic')}</h2>
             {infoSaved && <Check className="w-4 h-4 text-green-500" />}
           </div>
+          {saveError && (
+            <p className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+              {t('pkgEdit.saveFailed')}
+            </p>
+          )}
           <div className="p-4 space-y-4">
             <div>
               <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.title')}</label>
