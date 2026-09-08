@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -46,6 +46,9 @@ export default function CreatorPage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [packages, setPackages] = useState<CreatorPackage[]>([]);
   const [actionError, setActionError] = useState(false);
+  const [registerError, setRegisterError] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
@@ -54,22 +57,55 @@ export default function CreatorPage() {
   const [bio, setBio] = useState('');
   const [registering, setRegistering] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
+  // 取得失敗のバナーから引き直せるよう、マウント時の取得を関数に出す。
+  // マウント時にしか実行できないと、通信が復旧してもバナーが残り続ける。
+  const load = useCallback(async () => {
+    const [g, result] = await Promise.all([
       getMyGuideProfile(),
       getMyCreatorPackages(),
-    ]).then(([g, pkgs]) => {
-      setGuide(g);
-      setPackages(pkgs as unknown as CreatorPackage[]);
-    }).finally(() => setLoading(false));
+    ]);
+    // 未認証・取得失敗を「未登録・0件」と区別する。潰すと、ログインが
+    // 切れただけ／通信に失敗しただけなのに登録フォームとパッケージ0件が
+    // 出て、原因も再ログイン導線も分からない
+    if (result.reason === 'unauthenticated') {
+      setSessionExpired(true);
+      return;
+    }
+    setGuide(g);
+    // `as unknown as` を挟むと、戻り値の形を変えても tsc が検出しない。
+    // MyCreatorPackagesResult 側が status を持つのでそのまま代入できる
+    setPackages(result.packages);
+    setLoadError(result.reason === 'error');
   }, []);
+
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  const [reloading, setReloading] = useState(false);
+  const handleReload = async () => {
+    setReloading(true);
+    // このボタンが押されるのは通信が不安定なとき。auth.getUser() は
+    // ネットワーク断で reject し得るので、finally で必ず戻す。
+    // でないと reloading が true のまま固定され、再試行が二度とできない。
+    try {
+      await load();
+    } finally {
+      setReloading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!name.trim() || !location.trim()) return;
     setRegistering(true);
+    setRegisterError(false);
     const g = await registerAsGuide(name, location, bio);
     if (g) {
       setGuide(g);
+    } else {
+      // null は「登録できなかった」。何も出さないと押しても無反応に見え、
+      // ユーザーは連打して行を増やそうとする。#12
+      setRegisterError(true);
     }
     setRegistering(false);
   };
@@ -79,7 +115,9 @@ export default function CreatorPage() {
     // 楽観的に消すと、失敗しても消えたように見える
     const ok = await deleteCreatorPackage(pkgId);
     if (!ok) return setActionError(true);
+    // 直前の操作が通ったのに、古い取得失敗のバナーが残らないようにする
     setActionError(false);
+    setLoadError(false);
     setPackages((prev) => prev.filter((p) => p.id !== pkgId));
   };
 
@@ -88,6 +126,7 @@ export default function CreatorPage() {
     const ok = await setPackageStatus(pkgId, next);
     if (!ok) return setActionError(true);
     setActionError(false);
+    setLoadError(false);
     setPackages((prev) =>
       prev.map((p) => p.id === pkgId ? { ...p, status: next } : p)
     );
@@ -101,8 +140,53 @@ export default function CreatorPage() {
     );
   }
 
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <p className="text-[var(--muted)]">{t('common.sessionExpired')}</p>
+        <button
+          onClick={() => router.push('/login')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+        >
+          {t('common.relogin')}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="pt-[env(safe-area-inset-top)] pb-10">
+      {/* 公開トグルや削除はリストのどこからでも押せる。バナーをリスト先頭に
+          置くと、下の方を操作したときに画面外で気付けない。画面に固定する。
+          BottomNav(lg未満で表示)は約76px + env(safe-area-inset-bottom) なので、
+          固定値の bottom-24(96px) だとノッチ端末でナビの下に潜る。
+          セーフエリアを足した高さに出す。z も BottomNav(z-50)より上に置く
+          （レイアウト上ナビの方が後に描画されるため、同値だと負ける）。 */}
+      {(actionError || loadError) && (
+        <div
+          role="alert"
+          className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7rem)] z-[60] px-5 lg:bottom-6 lg:left-64"
+        >
+          <div className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg flex items-center gap-3">
+            <p className="flex-1">
+              {t(actionError ? 'creator.actionFailed' : 'creator.loadFailed')}
+            </p>
+            {/* 取得失敗は引き直せる。操作失敗と同時に立っていても、
+                引き直せること自体は変わらないので出す
+                （!actionError を条件にすると両方立ったときに導線が消え、
+                  loadError は次の成功操作まで残り続けていた） */}
+            {loadError && (
+              <button
+                onClick={handleReload}
+                disabled={reloading}
+                className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-red-100 font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
+              >
+                {t(reloading ? 'common.loading' : 'common.retry')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <header className="px-5 pt-6 pb-4 flex items-center gap-3">
         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5 text-[var(--text-main)]" />
@@ -149,6 +233,11 @@ export default function CreatorPage() {
                   className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
                 />
               </div>
+              {registerError && (
+                <p className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t('creator.registerFailed')}
+                </p>
+              )}
               <CTAButton
                 onClick={handleRegister}
                 fullWidth
@@ -214,12 +303,6 @@ export default function CreatorPage() {
                 {t('creator.list.new')}
               </Link>
             </div>
-
-            {actionError && (
-              <p className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
-                {t('creator.actionFailed')}
-              </p>
-            )}
 
             {packages.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-2xl shadow-sm">

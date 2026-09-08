@@ -22,6 +22,7 @@ import { CTAButton } from '@/components/cta-button';
 import {
   createCreatorPackage,
   updateCreatorPackage,
+  type SaveResult,
   getCreatorPackageWithSpots,
   createCreatorSpot,
   updateCreatorSpot,
@@ -72,7 +73,9 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [durationHours, setDurationHours] = useState('');
   const [infoSaved, setInfoSaved] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  // null = エラーなし。'ok' は成功なのでここには入らない。
+  // SaveResult をそのまま許すと、型の上では 'ok' で通信エラーの文言が出せてしまう
+  const [saveError, setSaveError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
 
   // スポット一覧
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -82,13 +85,20 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [editingSpot, setEditingSpot] = useState<Spot | null>(null);
   const [spotInput, setSpotInput] = useState<CreatorSpotInput>(EMPTY_SPOT);
   const [savingSpot, setSavingSpot] = useState(false);
+  // モーダル内の保存失敗。基本情報の saveError とは表示位置が違う
+  const [spotError, setSpotError] = useState(false);
+  // 基本情報フォームから離れた操作（公開トグル・スポット削除）用。
+  // saveError をそのまま使うとフォーム脇に出て、画面外で気付けない
+  const [actionError, setActionError] = useState(false);
 
   const [publishing, setPublishing] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [notFound, setNotFound] = useState(false);
+  // セッション切れは「他人のコンテンツ」ではない。文言と導線を分ける。
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const loadPackage = useCallback(async (pkgId: string) => {
-    const { pkg, spots: s } = await getCreatorPackageWithSpots(pkgId);
+    const { pkg, spots: s, reason } = await getCreatorPackageWithSpots(pkgId);
     if (pkg) {
       const p = pkg as typeof pkg & { status: string };
       setTitle(p.title);
@@ -102,6 +112,10 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       setDurationHours(p.duration_minutes ? String(p.duration_minutes / 60) : '');
       setStatus(p.status as 'draft' | 'published');
       setInfoSaved(true);
+    } else if (reason === 'unauthenticated') {
+      // ログインが切れているだけ。「自分が作成したものか確認してください」を
+      // 出すと原因と表示が食い違い、再ログインの導線も無くなる。
+      setSessionExpired(true);
     } else {
       // 自分のものでない、または存在しないID。
       // 空のフォームを出すと新規作成と見分けが付かないので明示する。
@@ -135,22 +149,22 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     const priceNum = parseInt(price) || 0;
 
     if (!packageId) {
-      const newId = await createCreatorPackage(
+      const created = await createCreatorPackage(
         guideId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin,
       );
-      // 新規作成も同じ扱い。guide が未指定/他人のものだと insert が弾かれるので、
-      // 何も起きないまま放置しない
-      setInfoSaved(!!newId);
-      setSaveError(!newId);
-      if (newId) {
-        setPackageId(newId);
-        router.replace(`/creator/package/${newId}`);
+      // 新規作成も同じ扱い。guide が未指定/他人のものだと INSERT が RLS に
+      // 弾かれる（forbidden）が、通信エラーまで所有権を疑う文言にしない
+      setInfoSaved(created.result === 'ok');
+      setSaveError(created.result === 'ok' ? null : created.result);
+      if (created.id) {
+        setPackageId(created.id);
+        router.replace(`/creator/package/${created.id}`);
       }
     } else {
       // 失敗を「保存済み ✓」で覆い隠さない
-      const ok = await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
-      setInfoSaved(ok);
-      setSaveError(!ok);
+      const result = await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
+      setInfoSaved(result === 'ok');
+      setSaveError(result === 'ok' ? null : result);
     }
     setSavingInfo(false);
   };
@@ -158,6 +172,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const openAddSpot = () => {
     setEditingSpot(null);
     setSpotInput({ ...EMPTY_SPOT, local_tips: ['', '', ''], etiquette_tips: ['', '', ''], phrases: [{ japanese: '', reading: '', meaning: '' }, { japanese: '', reading: '', meaning: '' }] });
+    setSpotError(false);
     setShowSpotModal(true);
   };
 
@@ -179,6 +194,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
         { japanese: '', reading: '', meaning: '' },
       ].slice(0, Math.max(2, spot.japanese_phrases.length + 1)),
     });
+    setSpotError(false);
     setShowSpotModal(true);
   };
 
@@ -192,11 +208,18 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       phrases: spotInput.phrases.filter((p) => p.japanese.trim()),
     };
 
-    if (editingSpot) {
-      await updateCreatorSpot(editingSpot.id, packageId, cleanInput);
-    } else {
-      await createCreatorSpot(packageId, spots.length + 1, cleanInput);
+    // 戻り値を見ずに閉じると、保存できていないのに保存されたように見える。
+    // 失敗したときはモーダルを開いたままにして、入力を捨てない。
+    const ok = editingSpot
+      ? await updateCreatorSpot(editingSpot.id, packageId, cleanInput)
+      : Boolean(await createCreatorSpot(packageId, spots.length + 1, cleanInput));
+
+    setSpotError(!ok);
+    if (!ok) {
+      setSavingSpot(false);
+      return;
     }
+
     await loadPackage(packageId);
     setShowSpotModal(false);
     setSavingSpot(false);
@@ -206,7 +229,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     if (!packageId || !confirm(t('pkgEdit.confirmDeleteSpot'))) return;
     const ok = await deleteCreatorSpot(spotId, packageId);
     // 成功時にクリアしないと、一度失敗したバナーが以降ずっと残る
-    setSaveError(!ok);
+    setActionError(!ok);
     if (!ok) return;
     setSpots((prev) => prev.filter((s) => s.id !== spotId));
   };
@@ -217,7 +240,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     const next = status === 'published' ? 'draft' : 'published';
     const ok = await setPackageStatus(packageId, next);
     if (ok) setStatus(next);
-    setSaveError(!ok);
+    setActionError(!ok);
     setPublishing(false);
   };
 
@@ -250,6 +273,20 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     );
   }
 
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <p className="text-[var(--muted)]">{t('common.sessionExpired')}</p>
+        <button
+          onClick={() => router.push('/login')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+        >
+          {t('common.relogin')}
+        </button>
+      </div>
+    );
+  }
+
   if (notFound) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
@@ -265,7 +302,18 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)] pb-32">
+    // 固定バーの高さは publishNote と actionError の有無で変わる。
+    // pb-32(128px) 固定だと、バナー表示中にページ末尾（スポット一覧の
+    // 削除ボタン）がバーの裏に入って出てこない。セーフエリア + 実際に
+    // 出ている要素ぶんを確保する。
+    <div
+      className={cn(
+        'min-h-screen bg-[var(--background)]',
+        actionError
+          ? 'pb-[calc(env(safe-area-inset-bottom)+14rem)]'
+          : 'pb-[calc(env(safe-area-inset-bottom)+10rem)]',
+      )}
+    >
       {/* ヘッダー */}
       <header className="sticky top-0 z-40 bg-white border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -294,8 +342,12 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             {infoSaved && <Check className="w-4 h-4 text-green-500" />}
           </div>
           {saveError && (
-            <p className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
-              {t('pkgEdit.saveFailed')}
+            <p role="alert" className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+              {t(
+                saveError === 'forbidden' ? 'pkgEdit.saveFailed'
+                : saveError === 'partial' ? 'pkgEdit.savePartial'
+                : 'pkgEdit.saveError'
+              )}
             </p>
           )}
           <div className="p-4 space-y-4">
@@ -475,6 +527,15 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       {packageId && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
           <div className="max-w-lg mx-auto">
+            {/* 公開トグルとスポット削除の失敗はここに出す。
+                画面に固定して浮かせると、このバー自体（高さはセーフエリア分と
+                publishNote の有無で変わる）に被さって公開ボタンのタップを奪う。
+                バーの内側・ボタンの真上なら、高さが変わっても重ならない。 */}
+            {actionError && (
+              <p role="alert" className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                {t('pkgEdit.saveFailed')}
+              </p>
+            )}
             <CTAButton
               onClick={handleTogglePublish}
               fullWidth
@@ -663,6 +724,13 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
 
             {/* 固定ボタン */}
             <div className="px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] border-t border-gray-100 flex-shrink-0">
+              {/* 保存できなかったときはボタンの真上に出す。モーダルは
+                  中身がスクロールするので、上部に置くと見えないことがある */}
+              {spotError && (
+                <p role="alert" className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t('pkgEdit.saveFailed')}
+                </p>
+              )}
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowSpotModal(false)}
