@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -57,25 +57,37 @@ export default function CreatorPage() {
   const [bio, setBio] = useState('');
   const [registering, setRegistering] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
+  // 取得失敗のバナーから引き直せるよう、マウント時の取得を関数に出す。
+  // マウント時にしか実行できないと、通信が復旧してもバナーが残り続ける。
+  const load = useCallback(async () => {
+    const [g, result] = await Promise.all([
       getMyGuideProfile(),
       getMyCreatorPackages(),
-    ]).then(([g, result]) => {
-      // 未認証・取得失敗を「未登録・0件」と区別する。潰すと、ログインが
-      // 切れただけ／通信に失敗しただけなのに登録フォームとパッケージ0件が
-      // 出て、原因も再ログイン導線も分からない
-      if (result.reason === 'unauthenticated') {
-        setSessionExpired(true);
-        return;
-      }
-      setGuide(g);
-      // `as unknown as` を挟むと、戻り値の形を変えても tsc が検出しない。
-      // MyCreatorPackagesResult 側が status を持つのでそのまま代入できる
-      setPackages(result.packages);
-      setLoadError(result.reason === 'error');
-    }).finally(() => setLoading(false));
+    ]);
+    // 未認証・取得失敗を「未登録・0件」と区別する。潰すと、ログインが
+    // 切れただけ／通信に失敗しただけなのに登録フォームとパッケージ0件が
+    // 出て、原因も再ログイン導線も分からない
+    if (result.reason === 'unauthenticated') {
+      setSessionExpired(true);
+      return;
+    }
+    setGuide(g);
+    // `as unknown as` を挟むと、戻り値の形を変えても tsc が検出しない。
+    // MyCreatorPackagesResult 側が status を持つのでそのまま代入できる
+    setPackages(result.packages);
+    setLoadError(result.reason === 'error');
   }, []);
+
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  const [reloading, setReloading] = useState(false);
+  const handleReload = async () => {
+    setReloading(true);
+    await load();
+    setReloading(false);
+  };
 
   const handleRegister = async () => {
     if (!name.trim() || !location.trim()) return;
@@ -97,7 +109,9 @@ export default function CreatorPage() {
     // 楽観的に消すと、失敗しても消えたように見える
     const ok = await deleteCreatorPackage(pkgId);
     if (!ok) return setActionError(true);
+    // 直前の操作が通ったのに、古い取得失敗のバナーが残らないようにする
     setActionError(false);
+    setLoadError(false);
     setPackages((prev) => prev.filter((p) => p.id !== pkgId));
   };
 
@@ -106,6 +120,7 @@ export default function CreatorPage() {
     const ok = await setPackageStatus(pkgId, next);
     if (!ok) return setActionError(true);
     setActionError(false);
+    setLoadError(false);
     setPackages((prev) =>
       prev.map((p) => p.id === pkgId ? { ...p, status: next } : p)
     );
@@ -137,15 +152,31 @@ export default function CreatorPage() {
     <div className="pt-[env(safe-area-inset-top)] pb-10">
       {/* 公開トグルや削除はリストのどこからでも押せる。バナーをリスト先頭に
           置くと、下の方を操作したときに画面外で気付けない。画面に固定する。
-          BottomNav(lg未満で表示)に重ならない高さに出す。 */}
+          BottomNav(lg未満で表示)は約76px + env(safe-area-inset-bottom) なので、
+          固定値の bottom-24(96px) だとノッチ端末でナビの下に潜る。
+          セーフエリアを足した高さに出す。z も BottomNav(z-50)より上に置く
+          （レイアウト上ナビの方が後に描画されるため、同値だと負ける）。 */}
       {(actionError || loadError) && (
         <div
           role="alert"
-          className="fixed inset-x-0 bottom-24 z-50 px-5 lg:bottom-6 lg:left-64"
+          className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7rem)] z-[60] px-5 lg:bottom-6 lg:left-64"
         >
-          <p className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg">
-            {t(actionError ? 'creator.actionFailed' : 'creator.loadFailed')}
-          </p>
+          <div className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg flex items-center gap-3">
+            <p className="flex-1">
+              {t(actionError ? 'creator.actionFailed' : 'creator.loadFailed')}
+            </p>
+            {/* 取得失敗は引き直せる。操作失敗(actionError)は
+                やり直す対象が操作側なので出さない */}
+            {!actionError && loadError && (
+              <button
+                onClick={handleReload}
+                disabled={reloading}
+                className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-red-100 font-medium hover:bg-red-200 transition-colors disabled:opacity-50"
+              >
+                {t(reloading ? 'common.loading' : 'common.retry')}
+              </button>
+            )}
+          </div>
         </div>
       )}
       <header className="px-5 pt-6 pb-4 flex items-center gap-3">

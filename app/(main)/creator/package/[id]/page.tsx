@@ -73,8 +73,9 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [durationHours, setDurationHours] = useState('');
   const [infoSaved, setInfoSaved] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
-  // null = エラーなし。文字列はそのまま表示する文言キーを決める
-  const [saveError, setSaveError] = useState<SaveResult | null>(null);
+  // null = エラーなし。'ok' は成功なのでここには入らない。
+  // SaveResult をそのまま許すと、型の上では 'ok' で通信エラーの文言が出せてしまう
+  const [saveError, setSaveError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
 
   // スポット一覧
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -302,15 +303,6 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-[var(--background)] pb-32">
-      {/* 公開トグルとスポット削除は基本情報フォームから離れた位置にある。
-          フォーム脇のバナーだと画面外になるので、画面に固定して出す */}
-      {actionError && (
-        <div role="alert" className="fixed inset-x-0 bottom-24 z-50 px-5 lg:bottom-6 lg:left-64">
-          <p className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg">
-            {t('pkgEdit.saveFailed')}
-          </p>
-        </div>
-      )}
       {/* ヘッダー */}
       <header className="sticky top-0 z-40 bg-white border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -524,6 +516,15 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       {packageId && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[var(--border)] p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
           <div className="max-w-lg mx-auto">
+            {/* 公開トグルとスポット削除の失敗はここに出す。
+                画面に固定して浮かせると、このバー自体（高さはセーフエリア分と
+                publishNote の有無で変わる）に被さって公開ボタンのタップを奪う。
+                バーの内側・ボタンの真上なら、高さが変わっても重ならない。 */}
+            {actionError && (
+              <p role="alert" className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                {t('pkgEdit.saveFailed')}
+              </p>
+            )}
             <CTAButton
               onClick={handleTogglePublish}
               fullWidth

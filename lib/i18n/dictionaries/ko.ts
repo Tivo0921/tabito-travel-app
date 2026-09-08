@@ -14,6 +14,7 @@ export const ko: Record<TranslationKey, string> = {
   'common.loading': '불러오는 중...',
   'common.settings': '설정',
   'common.goHome': '홈으로',
+  'common.retry': '다시 불러오기',
   'common.sessionExpired': '로그인이 만료되었습니다. 다시 로그인해 주세요',
   'common.relogin': '로그인하기',
   'common.readTime': '{count}분이면 읽어요',

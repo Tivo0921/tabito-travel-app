@@ -1117,7 +1117,7 @@ export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
       status: row.status,
-    } as Package & { status: string };
+    } satisfies Package & { status: string };
   });
 
   return { packages, reason: 'ok' };
@@ -1363,7 +1363,7 @@ export async function getCreatorPackageWithSpots(
     tutorial_video_url: row.tutorial_video_url ?? undefined,
     created_at: row.created_at,
     status: row.status,
-  } as Package & { status: string };
+  } satisfies Package & { status: string };
 
   const spots: Spot[] = (spotsResult.data ?? []).map((s) => {
     const st = Array.isArray(s.spot_translations)
@@ -1580,7 +1580,15 @@ export async function deleteCreatorSpot(
   packageId: string,
 ): Promise<boolean> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('spots').delete().eq('id', spotId).select('id');
+  // updateCreatorSpot と同じく package_id でも絞る。RLS があるので
+  // 権限の穴ではないが、同じ引数を取る関数で防御の深さを揃えておく。
+  // 別パッケージのスポットIDを渡された場合も0件で弾ける。
+  const { data, error } = await supabase
+    .from('spots')
+    .delete()
+    .eq('id', spotId)
+    .eq('package_id', packageId)
+    .select('id');
   if (error || !data || data.length === 0) {
     console.error('deleteCreatorSpot failed:', error?.message ?? '0 rows affected');
     return false;

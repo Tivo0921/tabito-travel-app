@@ -18,6 +18,7 @@ export const ja = {
   'common.loading': '読み込み中...',
   'common.settings': '設定',
   'common.goHome': 'ホームへ',
+  'common.retry': '再読み込み',
   'common.sessionExpired': 'ログインの有効期限が切れました。もう一度ログインしてください',
   'common.relogin': 'ログインする',
   'common.readTime': '{count}分で読める',

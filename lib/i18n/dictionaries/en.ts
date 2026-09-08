@@ -14,6 +14,7 @@ export const en: Record<TranslationKey, string> = {
   'common.loading': 'Loading...',
   'common.settings': 'Settings',
   'common.goHome': 'Go to home',
+  'common.retry': 'Retry',
   'common.sessionExpired': 'Your session has expired. Please sign in again.',
   'common.relogin': 'Sign in',
   'common.readTime': '{count} min read',
