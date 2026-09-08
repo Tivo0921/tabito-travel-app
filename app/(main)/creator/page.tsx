@@ -85,8 +85,14 @@ export default function CreatorPage() {
   const [reloading, setReloading] = useState(false);
   const handleReload = async () => {
     setReloading(true);
-    await load();
-    setReloading(false);
+    // このボタンが押されるのは通信が不安定なとき。auth.getUser() は
+    // ネットワーク断で reject し得るので、finally で必ず戻す。
+    // でないと reloading が true のまま固定され、再試行が二度とできない。
+    try {
+      await load();
+    } finally {
+      setReloading(false);
+    }
   };
 
   const handleRegister = async () => {
@@ -165,9 +171,11 @@ export default function CreatorPage() {
             <p className="flex-1">
               {t(actionError ? 'creator.actionFailed' : 'creator.loadFailed')}
             </p>
-            {/* 取得失敗は引き直せる。操作失敗(actionError)は
-                やり直す対象が操作側なので出さない */}
-            {!actionError && loadError && (
+            {/* 取得失敗は引き直せる。操作失敗と同時に立っていても、
+                引き直せること自体は変わらないので出す
+                （!actionError を条件にすると両方立ったときに導線が消え、
+                  loadError は次の成功操作まで残り続けていた） */}
+            {loadError && (
               <button
                 onClick={handleReload}
                 disabled={reloading}

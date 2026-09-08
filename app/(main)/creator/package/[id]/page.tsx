@@ -302,7 +302,18 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   }
 
   return (
-    <div className="min-h-screen bg-[var(--background)] pb-32">
+    // 固定バーの高さは publishNote と actionError の有無で変わる。
+    // pb-32(128px) 固定だと、バナー表示中にページ末尾（スポット一覧の
+    // 削除ボタン）がバーの裏に入って出てこない。セーフエリア + 実際に
+    // 出ている要素ぶんを確保する。
+    <div
+      className={cn(
+        'min-h-screen bg-[var(--background)]',
+        actionError
+          ? 'pb-[calc(env(safe-area-inset-bottom)+14rem)]'
+          : 'pb-[calc(env(safe-area-inset-bottom)+10rem)]',
+      )}
+    >
       {/* ヘッダー */}
       <header className="sticky top-0 z-40 bg-white border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 px-4 py-3">
