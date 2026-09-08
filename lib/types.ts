@@ -146,12 +146,27 @@ export interface PlanItem {
   plan_id: string;
   day: number;
   order: number;
-  item_type: 'spot' | 'meal' | 'transport' | 'manner';
+  item_type: 'spot' | 'meal' | 'transport' | 'manner' | 'package';
   title: string;
   scheduled_time: string | null;
   duration_minutes: number | null;
   spot_id: string | null;
   manner_tip_id: string | null;
+  /** item_type === 'package' の行だけが持つ（DB の CHECK で保証） */
+  package_id: string | null;
+  /** 表示用にJOINで解決したパッケージ情報。行そのものには無い */
+  package?: PlanItemPackage;
+}
+
+/** 計画に置いたパッケージブロックの表示情報 */
+export interface PlanItemPackage {
+  id: string;
+  title: string;
+  image_url: string;
+  area: string;
+  spot_count: number;
+  duration_minutes: number | null;
+  guide_name: string;
 }
 
 export interface Purchase {

@@ -11,6 +11,7 @@ import type {
   CommunityRoute,
   Plan,
   PlanItem,
+  PlanItemPackage,
   Purchase,
   CreatorSpotInput,
   Area,
@@ -641,6 +642,39 @@ export async function getCommunityRouteById(id: string, lang = DEFAULT_LANG): Pr
 // Plans (旅行計画)
 // ────────────────────────────────────────────────
 
+/**
+ * plan_items にぶら下げたパッケージ行を表示用に整える。
+ * PostgREST は 1対1 のリレーションでも配列で返すことがあるので、
+ * 呼び出し側で形を揃えてから渡す前提にしている。
+ */
+function planItemPackage(row: {
+  id: string;
+  image_url: string | null;
+  spot_count: number;
+  duration_minutes: number | null;
+  areas: unknown;
+  package_translations: unknown;
+  guides: unknown;
+}): PlanItemPackage {
+  const t = Array.isArray(row.package_translations)
+    ? row.package_translations[0]
+    : row.package_translations;
+  const guide = Array.isArray(row.guides) ? row.guides[0] : row.guides;
+  const guideTrans = guide
+    ? (Array.isArray(guide.guide_translations) ? guide.guide_translations[0] : guide.guide_translations)
+    : null;
+
+  return {
+    id: row.id,
+    title: (t as { title?: string } | null)?.title ?? '',
+    image_url: row.image_url ?? '',
+    area: relName(row.areas),
+    spot_count: row.spot_count,
+    duration_minutes: row.duration_minutes,
+    guide_name: (guideTrans as { name?: string } | null)?.name ?? '',
+  } satisfies PlanItemPackage;
+}
+
 export async function getMyPlans(): Promise<Plan[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -701,12 +735,23 @@ export async function deletePlan(planId: string): Promise<void> {
   await supabase.from('plans').delete().eq('id', planId);
 }
 
-export async function getPlanItems(planId: string): Promise<PlanItem[]> {
+export async function getPlanItems(planId: string, lang = DEFAULT_LANG): Promise<PlanItem[]> {
   const supabase = createClient();
+  // パッケージブロックは中身（画像・エリア・スポット数・ガイド名）を
+  // 出したいので一緒に引く。package_id が無い行では null になる。
   const { data, error } = await supabase
     .from('plan_items')
-    .select('*')
+    .select(`
+      *,
+      packages(
+        id, image_url, spot_count, duration_minutes,
+        areas(name),
+        package_translations(title),
+        guides(guide_translations(name))
+      )
+    `)
     .eq('plan_id', planId)
+    .eq('packages.package_translations.language', lang)
     .order('day', { ascending: true })
     .order('order', { ascending: true });
 
@@ -715,18 +760,26 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
     return [];
   }
 
-  return data.map((row) => ({
-    id: row.id,
-    plan_id: row.plan_id,
-    day: row.day,
-    order: row.order,
-    item_type: row.item_type as PlanItem['item_type'],
-    title: row.title,
-    scheduled_time: row.scheduled_time,
-    duration_minutes: row.duration_minutes,
-    spot_id: row.spot_id,
-    manner_tip_id: row.manner_tip_id,
-  } satisfies PlanItem));
+  return data.map((row) => {
+    const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
+    return {
+      id: row.id,
+      plan_id: row.plan_id,
+      day: row.day,
+      order: row.order,
+      item_type: row.item_type as PlanItem['item_type'],
+      title: row.title,
+      scheduled_time: row.scheduled_time,
+      duration_minutes: row.duration_minutes,
+      spot_id: row.spot_id,
+      manner_tip_id: row.manner_tip_id,
+      package_id: row.package_id,
+      // パッケージが削除されると package_id は SET NULL になり、
+      // タイトルだけが行に残る。ここも undefined になるので、
+      // 表示側は「もう無いパッケージ」として描ける
+      package: pkg ? planItemPackage(pkg) : undefined,
+    } satisfies PlanItem;
+  });
 }
 
 export async function addPlanItem(
@@ -778,6 +831,111 @@ export async function addPlanItem(
     duration_minutes: data.duration_minutes,
     spot_id: data.spot_id,
     manner_tip_id: data.manner_tip_id,
+    package_id: data.package_id,
+  } satisfies PlanItem;
+}
+
+/**
+ * 計画に置ける購入済みパッケージ。
+ * 有料コンテンツの中身が計画経由で漏れないよう、購入したものだけを返す。
+ * status = 'completed' に限る（pending は決済が通っていない）。
+ */
+export async function getPurchasedPackagesForPlan(
+  lang = DEFAULT_LANG,
+): Promise<PlanItemPackage[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('purchases')
+    .select(`
+      package_id,
+      packages!inner(
+        id, image_url, spot_count, duration_minutes,
+        areas(name),
+        package_translations(title),
+        guides(guide_translations(name))
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('status', 'completed')
+    .eq('packages.package_translations.language', lang)
+    .order('purchased_at', { ascending: false });
+
+  if (error || !data) {
+    console.error('getPurchasedPackagesForPlan error:', error);
+    return [];
+  }
+
+  return data
+    .map((row) => (Array.isArray(row.packages) ? row.packages[0] : row.packages))
+    .filter((pkg): pkg is NonNullable<typeof pkg> => Boolean(pkg))
+    .map(planItemPackage);
+}
+
+/**
+ * 計画にパッケージをブロックとして置く。
+ *
+ * タイトルは行に焼き付ける。パッケージが後で削除されると
+ * package_id は SET NULL になるが、「何を置いていたか」は残る。
+ *
+ * 所要時間もここで写す。行程の時刻計算に使うので、
+ * パッケージ側が後から変わっても既に組んだ予定が動かない方が良い。
+ */
+export async function addPlanPackage(
+  planId: string,
+  day: number,
+  pkg: PlanItemPackage,
+  scheduledTime?: string,
+): Promise<PlanItem | null> {
+  const supabase = createClient();
+
+  const { data: existing } = await supabase
+    .from('plan_items')
+    .select('order')
+    .eq('plan_id', planId)
+    .eq('day', day)
+    .order('order', { ascending: false })
+    .limit(1);
+
+  const nextOrder = existing && existing.length > 0 ? existing[0].order + 1 : 1;
+
+  const { data, error } = await supabase
+    .from('plan_items')
+    .insert({
+      plan_id: planId,
+      day,
+      order: nextOrder,
+      item_type: 'package',
+      title: pkg.title,
+      package_id: pkg.id,
+      duration_minutes: pkg.duration_minutes,
+      scheduled_time: scheduledTime || null,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    // 同じ計画に同じパッケージを二重に置こうとすると
+    // plan_items_unique_package_per_plan で 23505 が返る
+    console.error('addPlanPackage error:', error?.code, error?.message);
+    return null;
+  }
+
+  return {
+    id: data.id,
+    plan_id: data.plan_id,
+    day: data.day,
+    order: data.order,
+    item_type: 'package',
+    title: data.title,
+    scheduled_time: data.scheduled_time,
+    duration_minutes: data.duration_minutes,
+    spot_id: data.spot_id,
+    manner_tip_id: data.manner_tip_id,
+    package_id: data.package_id,
+    package: pkg,
   } satisfies PlanItem;
 }
 
