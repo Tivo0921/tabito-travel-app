@@ -46,6 +46,7 @@ export default function CreatorPage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [packages, setPackages] = useState<CreatorPackage[]>([]);
   const [actionError, setActionError] = useState(false);
+  const [registerError, setRegisterError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
@@ -67,9 +68,14 @@ export default function CreatorPage() {
   const handleRegister = async () => {
     if (!name.trim() || !location.trim()) return;
     setRegistering(true);
+    setRegisterError(false);
     const g = await registerAsGuide(name, location, bio);
     if (g) {
       setGuide(g);
+    } else {
+      // null は「登録できなかった」。何も出さないと押しても無反応に見え、
+      // ユーザーは連打して行を増やそうとする。#12
+      setRegisterError(true);
     }
     setRegistering(false);
   };
@@ -103,6 +109,19 @@ export default function CreatorPage() {
 
   return (
     <div className="pt-[env(safe-area-inset-top)] pb-10">
+      {/* 公開トグルや削除はリストのどこからでも押せる。バナーをリスト先頭に
+          置くと、下の方を操作したときに画面外で気付けない。画面に固定する。
+          BottomNav(lg未満で表示)に重ならない高さに出す。 */}
+      {actionError && (
+        <div
+          role="alert"
+          className="fixed inset-x-0 bottom-24 z-50 px-5 lg:bottom-6 lg:left-64"
+        >
+          <p className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg">
+            {t('creator.actionFailed')}
+          </p>
+        </div>
+      )}
       <header className="px-5 pt-6 pb-4 flex items-center gap-3">
         <button onClick={() => router.back()} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <ArrowLeft className="w-5 h-5 text-[var(--text-main)]" />
@@ -149,6 +168,11 @@ export default function CreatorPage() {
                   className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
                 />
               </div>
+              {registerError && (
+                <p className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t('creator.registerFailed')}
+                </p>
+              )}
               <CTAButton
                 onClick={handleRegister}
                 fullWidth
@@ -214,12 +238,6 @@ export default function CreatorPage() {
                 {t('creator.list.new')}
               </Link>
             </div>
-
-            {actionError && (
-              <p className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
-                {t('creator.actionFailed')}
-              </p>
-            )}
 
             {packages.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-2xl shadow-sm">

@@ -82,13 +82,20 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [editingSpot, setEditingSpot] = useState<Spot | null>(null);
   const [spotInput, setSpotInput] = useState<CreatorSpotInput>(EMPTY_SPOT);
   const [savingSpot, setSavingSpot] = useState(false);
+  // モーダル内の保存失敗。基本情報の saveError とは表示位置が違う
+  const [spotError, setSpotError] = useState(false);
+  // 基本情報フォームから離れた操作（公開トグル・スポット削除）用。
+  // saveError をそのまま使うとフォーム脇に出て、画面外で気付けない
+  const [actionError, setActionError] = useState(false);
 
   const [publishing, setPublishing] = useState(false);
   const [loading, setLoading] = useState(!isNew);
   const [notFound, setNotFound] = useState(false);
+  // セッション切れは「他人のコンテンツ」ではない。文言と導線を分ける。
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const loadPackage = useCallback(async (pkgId: string) => {
-    const { pkg, spots: s } = await getCreatorPackageWithSpots(pkgId);
+    const { pkg, spots: s, reason } = await getCreatorPackageWithSpots(pkgId);
     if (pkg) {
       const p = pkg as typeof pkg & { status: string };
       setTitle(p.title);
@@ -102,6 +109,10 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       setDurationHours(p.duration_minutes ? String(p.duration_minutes / 60) : '');
       setStatus(p.status as 'draft' | 'published');
       setInfoSaved(true);
+    } else if (reason === 'unauthenticated') {
+      // ログインが切れているだけ。「自分が作成したものか確認してください」を
+      // 出すと原因と表示が食い違い、再ログインの導線も無くなる。
+      setSessionExpired(true);
     } else {
       // 自分のものでない、または存在しないID。
       // 空のフォームを出すと新規作成と見分けが付かないので明示する。
@@ -158,6 +169,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const openAddSpot = () => {
     setEditingSpot(null);
     setSpotInput({ ...EMPTY_SPOT, local_tips: ['', '', ''], etiquette_tips: ['', '', ''], phrases: [{ japanese: '', reading: '', meaning: '' }, { japanese: '', reading: '', meaning: '' }] });
+    setSpotError(false);
     setShowSpotModal(true);
   };
 
@@ -179,6 +191,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
         { japanese: '', reading: '', meaning: '' },
       ].slice(0, Math.max(2, spot.japanese_phrases.length + 1)),
     });
+    setSpotError(false);
     setShowSpotModal(true);
   };
 
@@ -192,11 +205,18 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       phrases: spotInput.phrases.filter((p) => p.japanese.trim()),
     };
 
-    if (editingSpot) {
-      await updateCreatorSpot(editingSpot.id, packageId, cleanInput);
-    } else {
-      await createCreatorSpot(packageId, spots.length + 1, cleanInput);
+    // 戻り値を見ずに閉じると、保存できていないのに保存されたように見える。
+    // 失敗したときはモーダルを開いたままにして、入力を捨てない。
+    const ok = editingSpot
+      ? await updateCreatorSpot(editingSpot.id, packageId, cleanInput)
+      : Boolean(await createCreatorSpot(packageId, spots.length + 1, cleanInput));
+
+    setSpotError(!ok);
+    if (!ok) {
+      setSavingSpot(false);
+      return;
     }
+
     await loadPackage(packageId);
     setShowSpotModal(false);
     setSavingSpot(false);
@@ -206,7 +226,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     if (!packageId || !confirm(t('pkgEdit.confirmDeleteSpot'))) return;
     const ok = await deleteCreatorSpot(spotId, packageId);
     // 成功時にクリアしないと、一度失敗したバナーが以降ずっと残る
-    setSaveError(!ok);
+    setActionError(!ok);
     if (!ok) return;
     setSpots((prev) => prev.filter((s) => s.id !== spotId));
   };
@@ -217,7 +237,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     const next = status === 'published' ? 'draft' : 'published';
     const ok = await setPackageStatus(packageId, next);
     if (ok) setStatus(next);
-    setSaveError(!ok);
+    setActionError(!ok);
     setPublishing(false);
   };
 
@@ -250,6 +270,20 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     );
   }
 
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <p className="text-[var(--muted)]">{t('pkgEdit.sessionExpired')}</p>
+        <button
+          onClick={() => router.push('/login')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+        >
+          {t('pkgEdit.relogin')}
+        </button>
+      </div>
+    );
+  }
+
   if (notFound) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4">
@@ -266,6 +300,15 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-[var(--background)] pb-32">
+      {/* 公開トグルとスポット削除は基本情報フォームから離れた位置にある。
+          フォーム脇のバナーだと画面外になるので、画面に固定して出す */}
+      {actionError && (
+        <div role="alert" className="fixed inset-x-0 bottom-24 z-50 px-5 lg:bottom-6 lg:left-64">
+          <p className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg">
+            {t('pkgEdit.saveFailed')}
+          </p>
+        </div>
+      )}
       {/* ヘッダー */}
       <header className="sticky top-0 z-40 bg-white border-b border-[var(--border)] pt-[env(safe-area-inset-top)]">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -663,6 +706,13 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
 
             {/* 固定ボタン */}
             <div className="px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] border-t border-gray-100 flex-shrink-0">
+              {/* 保存できなかったときはボタンの真上に出す。モーダルは
+                  中身がスクロールするので、上部に置くと見えないことがある */}
+              {spotError && (
+                <p role="alert" className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t('pkgEdit.saveFailed')}
+                </p>
+              )}
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowSpotModal(false)}

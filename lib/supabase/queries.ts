@@ -1018,7 +1018,20 @@ export async function registerAsGuide(
     .insert({ guide_id: guide.id, language: 'ja', name, bio });
 
   if (transError) {
+    // 名前の無い guides 行を残さない。
+    // 残すと (1) UNIQUE 制約で以後の再登録が弾かれ、早期 return もあるので
+    // ユーザーは自力で復旧できず、(2) 重複統合の際に「古い方を残す」規則の
+    // 巻き添えで、名前のある行が消えて名前なしの行が生き残りうる。#12
     console.error('registerAsGuide translation error:', transError);
+    const { error: rollbackError } = await supabase
+      .from('guides')
+      .delete()
+      .eq('id', guide.id);
+    if (rollbackError) {
+      // ここまで来ると手で消すしかない。IDを残しておく。
+      console.error('registerAsGuide rollback failed:', guide.id, rollbackError);
+    }
+    return null;
   }
 
   return {
@@ -1215,13 +1228,23 @@ export async function deleteCreatorPackage(packageId: string): Promise<boolean> 
 /**
  * 編集画面用の取得。**自分のガイドのパッケージでなければ null を返す。**
  * URLを直接開かれても他人のコンテンツをフォームに載せないための防御。
+ *
+ * 取れなかった理由を `reason` で返す。未認証と「他人のもの」を同じ null に
+ * 潰すと、セッション切れなのに「自分が作成したものか確認してください」と
+ * 出て再ログイン導線が無くなる。呼び出し側で出し分けられるようにしておく。
  */
+export type CreatorPackageResult = {
+  pkg: (Package & { status: string }) | null;
+  spots: Spot[];
+  reason: 'ok' | 'unauthenticated' | 'notFound';
+};
+
 export async function getCreatorPackageWithSpots(
   packageId: string,
-): Promise<{ pkg: (Package & { status: string }) | null; spots: Spot[] }> {
+): Promise<CreatorPackageResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { pkg: null, spots: [] };
+  if (!user) return { pkg: null, spots: [], reason: 'unauthenticated' };
 
   const [pkgResult, spotsResult] = await Promise.all([
     supabase
@@ -1243,10 +1266,10 @@ export async function getCreatorPackageWithSpots(
 
   if (pkgResult.error) {
     console.error('getCreatorPackageWithSpots error:', pkgResult.error.message, pkgResult.error);
-    return { pkg: null, spots: [] };
+    return { pkg: null, spots: [], reason: 'notFound' };
   }
   // 他人のパッケージ、または存在しないIDのとき
-  if (!pkgResult.data) return { pkg: null, spots: [] };
+  if (!pkgResult.data) return { pkg: null, spots: [], reason: 'notFound' };
 
   const row = pkgResult.data;
   const t = Array.isArray(row.package_translations)
@@ -1314,7 +1337,7 @@ export async function getCreatorPackageWithSpots(
     };
   });
 
-  return { pkg, spots };
+  return { pkg, spots, reason: 'ok' };
 }
 
 export async function createCreatorSpot(
@@ -1376,18 +1399,26 @@ export async function updateCreatorSpot(
   spotId: string,
   packageId: string,
   input: CreatorSpotInput,
-): Promise<void> {
+): Promise<boolean> {
   const supabase = createClient();
 
-  await supabase.from('spots').update({
+  // RLS に弾かれた更新は error ではなく 0件 で返る。delete と同じく
+  // .select() して実際に書けたかを確認する。void を返していると
+  // 呼び出し側が失敗を検出できず、保存できていないのに閉じてしまう。
+  const { data: updated, error: spotError } = await supabase.from('spots').update({
     image_url: input.image_url || null,
     video_url: input.video_url || null,
     duration_minutes: input.duration_minutes || null,
     map_url: input.map_url || null,
     shop_url: input.shop_url || null,
-  }).eq('id', spotId);
+  }).eq('id', spotId).select('id');
 
-  await supabase.from('spot_translations').upsert({
+  if (spotError || !updated || updated.length === 0) {
+    console.error('updateCreatorSpot spot failed:', spotError?.message ?? '0 rows affected');
+    return false;
+  }
+
+  const { error: transError } = await supabase.from('spot_translations').upsert({
     spot_id: spotId,
     language: 'ja',
     name: input.name,
@@ -1395,6 +1426,11 @@ export async function updateCreatorSpot(
     local_tips: input.local_tips.filter(Boolean),
     etiquette_tips: input.etiquette_tips.filter(Boolean),
   }, { onConflict: 'spot_id,language' });
+
+  if (transError) {
+    console.error('updateCreatorSpot translation failed:', transError.message);
+    return false;
+  }
 
   // フレーズは削除してから再挿入
   const { data: oldPhrases } = await supabase
@@ -1424,6 +1460,7 @@ export async function updateCreatorSpot(
     }
   }
   void packageId;
+  return true;
 }
 
 export async function deleteCreatorSpot(
