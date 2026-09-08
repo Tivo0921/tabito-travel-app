@@ -48,6 +48,7 @@ export default function CreatorPage() {
   const [actionError, setActionError] = useState(false);
   const [registerError, setRegisterError] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
@@ -61,14 +62,18 @@ export default function CreatorPage() {
       getMyGuideProfile(),
       getMyCreatorPackages(),
     ]).then(([g, result]) => {
-      // 未認証を「未登録・0件」と区別する。潰すと、ログインが切れただけなのに
-      // 登録フォームとパッケージ0件が出て、原因も再ログイン導線も分からない
+      // 未認証・取得失敗を「未登録・0件」と区別する。潰すと、ログインが
+      // 切れただけ／通信に失敗しただけなのに登録フォームとパッケージ0件が
+      // 出て、原因も再ログイン導線も分からない
       if (result.reason === 'unauthenticated') {
         setSessionExpired(true);
         return;
       }
       setGuide(g);
-      setPackages(result.packages as unknown as CreatorPackage[]);
+      // `as unknown as` を挟むと、戻り値の形を変えても tsc が検出しない。
+      // MyCreatorPackagesResult 側が status を持つのでそのまま代入できる
+      setPackages(result.packages);
+      setLoadError(result.reason === 'error');
     }).finally(() => setLoading(false));
   }, []);
 
@@ -117,12 +122,12 @@ export default function CreatorPage() {
   if (sessionExpired) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="text-[var(--muted)]">{t('pkgEdit.sessionExpired')}</p>
+        <p className="text-[var(--muted)]">{t('common.sessionExpired')}</p>
         <button
           onClick={() => router.push('/login')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
         >
-          {t('pkgEdit.relogin')}
+          {t('common.relogin')}
         </button>
       </div>
     );
@@ -133,13 +138,13 @@ export default function CreatorPage() {
       {/* 公開トグルや削除はリストのどこからでも押せる。バナーをリスト先頭に
           置くと、下の方を操作したときに画面外で気付けない。画面に固定する。
           BottomNav(lg未満で表示)に重ならない高さに出す。 */}
-      {actionError && (
+      {(actionError || loadError) && (
         <div
           role="alert"
           className="fixed inset-x-0 bottom-24 z-50 px-5 lg:bottom-6 lg:left-64"
         >
           <p className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg">
-            {t('creator.actionFailed')}
+            {t(actionError ? 'creator.actionFailed' : 'creator.loadFailed')}
           </p>
         </div>
       )}

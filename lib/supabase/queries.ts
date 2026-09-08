@@ -1023,13 +1023,16 @@ export async function registerAsGuide(
     // ユーザーは自力で復旧できず、(2) 重複統合の際に「古い方を残す」規則の
     // 巻き添えで、名前のある行が消えて名前なしの行が生き残りうる。#12
     console.error('registerAsGuide translation error:', transError);
-    const { error: rollbackError } = await supabase
+    // RLS に弾かれた DELETE は error ではなく0件で返る。error だけを見ると、
+    // 行が残っているのに「消せた」ことになってしまう。
+    const { data: rolledBack, error: rollbackError } = await supabase
       .from('guides')
       .delete()
-      .eq('id', guide.id);
-    if (rollbackError) {
+      .eq('id', guide.id)
+      .select('id');
+    if (rollbackError || !rolledBack || rolledBack.length === 0) {
       // ここまで来ると手で消すしかない。IDを残しておく。
-      console.error('registerAsGuide rollback failed:', guide.id, rollbackError);
+      console.error('registerAsGuide rollback failed:', guide.id, rollbackError?.message ?? '0 rows affected');
     }
     return null;
   }
@@ -1048,13 +1051,16 @@ export async function registerAsGuide(
 }
 
 /**
- * 管理ダッシュボード用。未認証は `[]` ではなく `unauthenticated` で返す。
- * 空配列に潰すと、ログインが切れているだけなのに
+ * 管理ダッシュボード用。未認証も取得失敗も `[]` に潰さず reason で返す。
+ * 空配列に潰すと、ログインが切れただけ／通信に失敗しただけなのに
  * 「パッケージ0件」の画面が出て、原因も再ログイン導線も分からない。
+ *
+ * `status` を戻り値の型に含めておく。呼び出し側で `as unknown as` を
+ * 挟むと、戻り値の形を変えても tsc が検出しなくなる。
  */
 export type MyCreatorPackagesResult = {
-  packages: Package[];
-  reason: 'ok' | 'unauthenticated';
+  packages: (Package & { status: string })[];
+  reason: 'ok' | 'unauthenticated' | 'error';
 };
 
 export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
@@ -1079,8 +1085,10 @@ export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
     .order('created_at', { ascending: false });
 
   if (error || !data) {
+    // 取得できなかったことを 'ok' で返すと「0件」と区別が付かず、
+    // 無言失敗がここだけ残る。
     console.error('getMyCreatorPackages error:', error);
-    return { packages: [], reason: 'ok' };
+    return { packages: [], reason: 'error' };
   }
 
   const packages = data.map((row) => {
@@ -1115,6 +1123,15 @@ export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
   return { packages, reason: 'ok' };
 }
 
+/**
+ * 新規作成の結果。`string | null` だと「他人のガイドID（=所有権）」と
+ * 「通信・サーバー側の失敗」が同じ null に潰れ、一時的なエラーでも
+ * 所有権を疑う文言を出すことになる。
+ */
+export type CreatePackageResult =
+  | { id: string; result: 'ok' }
+  | { id: null; result: 'forbidden' | 'error' };
+
 export async function createCreatorPackage(
   guideId: string,
   title: string,
@@ -1125,7 +1142,7 @@ export async function createCreatorPackage(
   categoryId: string,
   imageUrl: string,
   durationMinutes: number | null,
-): Promise<string | null> {
+): Promise<CreatePackageResult> {
   const supabase = createClient();
 
   const { data: pkg, error: pkgError } = await supabase
@@ -1146,11 +1163,13 @@ export async function createCreatorPackage(
     .single();
 
   if (pkgError || !pkg) {
+    // INSERT が RLS(WITH CHECK) に弾かれると 42501 が返る。0件で返る
+    // UPDATE と違い、ここはエラーコードで所有権と通信障害を見分けられる。
     console.error('createCreatorPackage error:', pkgError);
-    return null;
+    return { id: null, result: pkgError?.code === '42501' ? 'forbidden' : 'error' };
   }
 
-  await supabase.from('package_translations').insert({
+  const { error: transError } = await supabase.from('package_translations').insert({
     package_id: pkg.id,
     language: 'ja',
     title,
@@ -1158,7 +1177,22 @@ export async function createCreatorPackage(
     description,
   });
 
-  return pkg.id;
+  if (transError) {
+    // タイトルの無いパッケージを残さない。createCreatorSpot と同じ補償削除。
+    // package_translations は packages への FK が ON DELETE CASCADE。
+    console.error('createCreatorPackage translation failed:', transError.message);
+    const { data: rolledBack, error: rbError } = await supabase
+      .from('packages')
+      .delete()
+      .eq('id', pkg.id)
+      .select('id');
+    if (rbError || !rolledBack || rolledBack.length === 0) {
+      console.error('createCreatorPackage rollback failed:', pkg.id, rbError?.message ?? '0 rows affected');
+    }
+    return { id: null, result: 'error' };
+  }
+
+  return { id: pkg.id, result: 'ok' };
 }
 
 /**
@@ -1406,8 +1440,13 @@ export async function createCreatorSpot(
   // ON DELETE CASCADE なので、行を1つ消せば道連れで消える。
   const rollback = async (why: string, detail?: unknown) => {
     console.error('createCreatorSpot rollback:', why, detail);
-    const { error: rbError } = await supabase.from('spots').delete().eq('id', spot.id);
-    if (rbError) console.error('createCreatorSpot rollback failed:', spot.id, rbError.message);
+    // ここも0件を見る。error だけだと、RLS に弾かれて孤児のスポットが
+    // 残っているのに「消せた」ことになる。
+    const { data: rolledBack, error: rbError } = await supabase
+      .from('spots').delete().eq('id', spot.id).select('id');
+    if (rbError || !rolledBack || rolledBack.length === 0) {
+      console.error('createCreatorSpot rollback failed:', spot.id, rbError?.message ?? '0 rows affected');
+    }
     return null;
   };
 

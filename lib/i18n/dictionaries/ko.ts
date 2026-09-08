@@ -14,6 +14,8 @@ export const ko: Record<TranslationKey, string> = {
   'common.loading': '불러오는 중...',
   'common.settings': '설정',
   'common.goHome': '홈으로',
+  'common.sessionExpired': '로그인이 만료되었습니다. 다시 로그인해 주세요',
+  'common.relogin': '로그인하기',
   'common.readTime': '{count}분이면 읽어요',
 
   // 홈
@@ -373,10 +375,9 @@ export const ko: Record<TranslationKey, string> = {
   'creator.action.publish': '공개하기',
   'creator.action.delete': '삭제',
   'creator.actionFailed': '작업을 완료하지 못했습니다. 본인이 만든 콘텐츠인지 확인해 주세요',
+  'creator.loadFailed': '불러오지 못했습니다. 통신 상태를 확인하고 페이지를 새로고침해 주세요',
   'creator.registerFailed': '크리에이터 등록에 실패했습니다. 잠시 후 다시 시도해 주세요',
   'pkgEdit.notFound': '이 패키지는 편집할 수 없습니다. 본인이 만든 것인지 확인해 주세요',
-  'pkgEdit.sessionExpired': '로그인이 만료되었습니다. 다시 로그인해 주세요',
-  'pkgEdit.relogin': '로그인하기',
   'pkgEdit.saveFailed': '저장하지 못했습니다. 본인이 만든 콘텐츠인지 확인해 주세요',
   'pkgEdit.saveError': '저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
   'pkgEdit.savePartial': '일부만 저장되었습니다. 다시 저장해 주세요',

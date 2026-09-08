@@ -148,16 +148,16 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     const priceNum = parseInt(price) || 0;
 
     if (!packageId) {
-      const newId = await createCreatorPackage(
+      const created = await createCreatorPackage(
         guideId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin,
       );
-      // 新規作成も同じ扱い。guide が未指定/他人のものだと insert が弾かれるので、
-      // 何も起きないまま放置しない
-      setInfoSaved(!!newId);
-      setSaveError(newId ? null : 'forbidden');
-      if (newId) {
-        setPackageId(newId);
-        router.replace(`/creator/package/${newId}`);
+      // 新規作成も同じ扱い。guide が未指定/他人のものだと INSERT が RLS に
+      // 弾かれる（forbidden）が、通信エラーまで所有権を疑う文言にしない
+      setInfoSaved(created.result === 'ok');
+      setSaveError(created.result === 'ok' ? null : created.result);
+      if (created.id) {
+        setPackageId(created.id);
+        router.replace(`/creator/package/${created.id}`);
       }
     } else {
       // 失敗を「保存済み ✓」で覆い隠さない
@@ -275,12 +275,12 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   if (sessionExpired) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="text-[var(--muted)]">{t('pkgEdit.sessionExpired')}</p>
+        <p className="text-[var(--muted)]">{t('common.sessionExpired')}</p>
         <button
           onClick={() => router.push('/login')}
           className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
         >
-          {t('pkgEdit.relogin')}
+          {t('common.relogin')}
         </button>
       </div>
     );

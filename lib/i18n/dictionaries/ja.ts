@@ -18,6 +18,8 @@ export const ja = {
   'common.loading': '読み込み中...',
   'common.settings': '設定',
   'common.goHome': 'ホームへ',
+  'common.sessionExpired': 'ログインの有効期限が切れました。もう一度ログインしてください',
+  'common.relogin': 'ログインする',
   'common.readTime': '{count}分で読める',
 
   // ホーム
@@ -377,10 +379,9 @@ export const ja = {
   'creator.action.publish': '公開する',
   'creator.action.delete': '削除',
   'creator.actionFailed': '操作できませんでした。自分が作成したコンテンツか確認してください',
+  'creator.loadFailed': '読み込みに失敗しました。通信状況を確認して、画面を再読み込みしてください',
   'creator.registerFailed': 'クリエイター登録に失敗しました。時間をおいてもう一度お試しください',
   'pkgEdit.notFound': 'このパッケージは編集できません。自分が作成したものか確認してください',
-  'pkgEdit.sessionExpired': 'ログインの有効期限が切れました。もう一度ログインしてください',
-  'pkgEdit.relogin': 'ログインする',
   'pkgEdit.saveFailed': '保存できませんでした。自分が作成したコンテンツか確認してください',
   'pkgEdit.saveError': '保存できませんでした。通信状況を確認して、もう一度お試しください',
   'pkgEdit.savePartial': '一部だけ保存されました。もう一度保存してください',
