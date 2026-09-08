@@ -382,6 +382,8 @@ export const ja = {
   'pkgEdit.sessionExpired': 'ログインの有効期限が切れました。もう一度ログインしてください',
   'pkgEdit.relogin': 'ログインする',
   'pkgEdit.saveFailed': '保存できませんでした。自分が作成したコンテンツか確認してください',
+  'pkgEdit.saveError': '保存できませんでした。通信状況を確認して、もう一度お試しください',
+  'pkgEdit.savePartial': '一部だけ保存されました。もう一度保存してください',
   'creator.confirmDelete': 'このパッケージを削除しますか？',
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count}スポット',

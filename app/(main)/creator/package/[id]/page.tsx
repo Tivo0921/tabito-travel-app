@@ -22,6 +22,7 @@ import { CTAButton } from '@/components/cta-button';
 import {
   createCreatorPackage,
   updateCreatorPackage,
+  type SaveResult,
   getCreatorPackageWithSpots,
   createCreatorSpot,
   updateCreatorSpot,
@@ -72,7 +73,8 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [durationHours, setDurationHours] = useState('');
   const [infoSaved, setInfoSaved] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  // null = エラーなし。文字列はそのまま表示する文言キーを決める
+  const [saveError, setSaveError] = useState<SaveResult | null>(null);
 
   // スポット一覧
   const [spots, setSpots] = useState<Spot[]>([]);
@@ -152,16 +154,16 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       // 新規作成も同じ扱い。guide が未指定/他人のものだと insert が弾かれるので、
       // 何も起きないまま放置しない
       setInfoSaved(!!newId);
-      setSaveError(!newId);
+      setSaveError(newId ? null : 'forbidden');
       if (newId) {
         setPackageId(newId);
         router.replace(`/creator/package/${newId}`);
       }
     } else {
       // 失敗を「保存済み ✓」で覆い隠さない
-      const ok = await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
-      setInfoSaved(ok);
-      setSaveError(!ok);
+      const result = await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
+      setInfoSaved(result === 'ok');
+      setSaveError(result === 'ok' ? null : result);
     }
     setSavingInfo(false);
   };
@@ -337,8 +339,12 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
             {infoSaved && <Check className="w-4 h-4 text-green-500" />}
           </div>
           {saveError && (
-            <p className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
-              {t('pkgEdit.saveFailed')}
+            <p role="alert" className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+              {t(
+                saveError === 'forbidden' ? 'pkgEdit.saveFailed'
+                : saveError === 'partial' ? 'pkgEdit.savePartial'
+                : 'pkgEdit.saveError'
+              )}
             </p>
           )}
           <div className="p-4 space-y-4">

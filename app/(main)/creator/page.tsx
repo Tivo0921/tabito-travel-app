@@ -47,6 +47,7 @@ export default function CreatorPage() {
   const [packages, setPackages] = useState<CreatorPackage[]>([]);
   const [actionError, setActionError] = useState(false);
   const [registerError, setRegisterError] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
@@ -59,9 +60,15 @@ export default function CreatorPage() {
     Promise.all([
       getMyGuideProfile(),
       getMyCreatorPackages(),
-    ]).then(([g, pkgs]) => {
+    ]).then(([g, result]) => {
+      // 未認証を「未登録・0件」と区別する。潰すと、ログインが切れただけなのに
+      // 登録フォームとパッケージ0件が出て、原因も再ログイン導線も分からない
+      if (result.reason === 'unauthenticated') {
+        setSessionExpired(true);
+        return;
+      }
       setGuide(g);
-      setPackages(pkgs as unknown as CreatorPackage[]);
+      setPackages(result.packages as unknown as CreatorPackage[]);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -103,6 +110,20 @@ export default function CreatorPage() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-[var(--muted)]">{t('common.loading')}</p>
+      </div>
+    );
+  }
+
+  if (sessionExpired) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center">
+        <p className="text-[var(--muted)]">{t('pkgEdit.sessionExpired')}</p>
+        <button
+          onClick={() => router.push('/login')}
+          className="px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold hover:bg-[var(--primary)]/90 transition-colors"
+        >
+          {t('pkgEdit.relogin')}
+        </button>
       </div>
     );
   }

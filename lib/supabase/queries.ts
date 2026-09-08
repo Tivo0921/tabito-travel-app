@@ -1047,10 +1047,20 @@ export async function registerAsGuide(
   };
 }
 
-export async function getMyCreatorPackages(): Promise<Package[]> {
+/**
+ * 管理ダッシュボード用。未認証は `[]` ではなく `unauthenticated` で返す。
+ * 空配列に潰すと、ログインが切れているだけなのに
+ * 「パッケージ0件」の画面が出て、原因も再ログイン導線も分からない。
+ */
+export type MyCreatorPackagesResult = {
+  packages: Package[];
+  reason: 'ok' | 'unauthenticated';
+};
+
+export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  if (!user) return { packages: [], reason: 'unauthenticated' };
 
   // 自分のガイドのものだけ返す。
   // packages の SELECT ポリシーは公開コンテンツを全員に開放しているので、
@@ -1070,10 +1080,10 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
 
   if (error || !data) {
     console.error('getMyCreatorPackages error:', error);
-    return [];
+    return { packages: [], reason: 'ok' };
   }
 
-  return data.map((row) => {
+  const packages = data.map((row) => {
     const t = Array.isArray(row.package_translations)
       ? row.package_translations[0]
       : row.package_translations;
@@ -1101,6 +1111,8 @@ export async function getMyCreatorPackages(): Promise<Package[]> {
       status: row.status,
     } as Package & { status: string };
   });
+
+  return { packages, reason: 'ok' };
 }
 
 export async function createCreatorPackage(
@@ -1149,6 +1161,15 @@ export async function createCreatorPackage(
   return pkg.id;
 }
 
+/**
+ * 保存の結果。失敗を1つの false に潰すと、原因の違う失敗に
+ * 同じ文言（所有権を疑う文言）を出すことになる。
+ * - forbidden: 自分のコンテンツではない（RLS が0件で返した）
+ * - error:     通信・サーバー側の失敗。やり直せば直りうる
+ * - partial:   一部だけ保存された。#22 で RPC 化して解消する
+ */
+export type SaveResult = 'ok' | 'forbidden' | 'error' | 'partial';
+
 export async function updateCreatorPackage(
   packageId: string,
   title: string,
@@ -1159,7 +1180,7 @@ export async function updateCreatorPackage(
   categoryId: string,
   imageUrl: string,
   durationMinutes: number | null,
-): Promise<boolean> {
+): Promise<SaveResult> {
   const supabase = createClient();
 
   // RLS に弾かれても HTTP 200 / 0件 が返るだけでエラーにならない。
@@ -1173,9 +1194,16 @@ export async function updateCreatorPackage(
     duration_minutes: durationMinutes,
   }).eq('id', packageId).select('id');
 
-  if (error || !data || data.length === 0) {
-    console.error('updateCreatorPackage failed:', error?.message ?? '0 rows affected');
-    return false;
+  // 0件 = 自分のものではない。error = 通信・サーバー側の失敗。
+  // どちらも「自分が作成したコンテンツか確認してください」と出すと、
+  // 一時的なネットワークエラーで所有権を疑わせることになる。
+  if (error) {
+    console.error('updateCreatorPackage failed:', error.message);
+    return 'error';
+  }
+  if (!data || data.length === 0) {
+    console.error('updateCreatorPackage failed: 0 rows affected');
+    return 'forbidden';
   }
 
   const { error: tError } = await supabase.from('package_translations').upsert({
@@ -1187,10 +1215,13 @@ export async function updateCreatorPackage(
   }, { onConflict: 'package_id,language' });
 
   if (tError) {
+    // packages 側は既にコミット済み。エリア・価格などだけ保存され、
+    // タイトル・説明が古いまま残る。PostgREST では複文トランザクションを
+    // 張れないため、ここは RPC 化しないと解けない。#22
     console.error('updateCreatorPackage translation failed:', tError.message);
-    return false;
+    return 'partial';
   }
-  return true;
+  return 'ok';
 }
 
 export async function setPackageStatus(
@@ -1366,7 +1397,21 @@ export async function createCreatorSpot(
     return null;
   }
 
-  await supabase.from('spot_translations').insert({
+  // 名前の無いスポットを残さない。translation が落ちたのに id を返すと、
+  // 公開パッケージに無名のスポットが並ぶ。registerAsGuide と同じ扱いにする。
+  //
+  // PostgREST は複文トランザクションを張れないので、ここでは
+  // 「失敗したら spots 行を消す」補償削除で原子性に寄せている。
+  // spot_translations と japanese_phrases は spots への FK が
+  // ON DELETE CASCADE なので、行を1つ消せば道連れで消える。
+  const rollback = async (why: string, detail?: unknown) => {
+    console.error('createCreatorSpot rollback:', why, detail);
+    const { error: rbError } = await supabase.from('spots').delete().eq('id', spot.id);
+    if (rbError) console.error('createCreatorSpot rollback failed:', spot.id, rbError.message);
+    return null;
+  };
+
+  const { error: transError } = await supabase.from('spot_translations').insert({
     spot_id: spot.id,
     language: 'ja',
     name: input.name,
@@ -1375,26 +1420,45 @@ export async function createCreatorSpot(
     etiquette_tips: input.etiquette_tips.filter(Boolean),
   });
 
+  if (transError) return rollback('translation insert failed', transError.message);
+
   for (let i = 0; i < input.phrases.length; i++) {
     const phrase = input.phrases[i];
     if (!phrase.japanese.trim()) continue;
-    const { data: p } = await supabase
+    const { data: p, error: phraseError } = await supabase
       .from('japanese_phrases')
       .insert({ spot_id: spot.id, japanese: phrase.japanese, reading: phrase.reading, order: i + 1 })
       .select()
       .single();
-    if (p) {
-      await supabase.from('japanese_phrase_translations').insert({
-        phrase_id: p.id, language: 'ja', meaning: phrase.meaning, context: null,
-      });
-    }
+    if (phraseError || !p) return rollback('phrase insert failed', phraseError?.message);
+
+    const { error: meaningError } = await supabase.from('japanese_phrase_translations').insert({
+      phrase_id: p.id, language: 'ja', meaning: phrase.meaning, context: null,
+    });
+    if (meaningError) return rollback('phrase translation insert failed', meaningError.message);
   }
 
-  await supabase.from('packages').update({ spot_count: order }).eq('id', packageId);
+  const { error: countError } = await supabase
+    .from('packages')
+    .update({ spot_count: order })
+    .eq('id', packageId);
+  // spot_count は表示用の集計値。ここだけの失敗でスポットを捨てるのは
+  // 割に合わないので、ログに残して保存自体は成功として返す。
+  if (countError) console.error('createCreatorSpot spot_count update failed:', countError.message);
 
   return spot.id;
 }
 
+/**
+ * スポット1件の保存。**原子的ではない。**
+ *
+ * PostgREST 経由では複文トランザクションを張れないため、途中で失敗すると
+ * 「false を返す（＝保存できませんでした と出る）のに spots の UPDATE だけは
+ * コミット済み」という状態が残りうる。各書き込みの成否を返すのは
+ * 「黙って失敗する」のを止めるためで、部分更新そのものは解消していない。
+ *
+ * 正攻法は保存全体を SECURITY INVOKER の Postgres 関数にまとめること。#22
+ */
 export async function updateCreatorSpot(
   spotId: string,
   packageId: string,
@@ -1411,7 +1475,7 @@ export async function updateCreatorSpot(
     duration_minutes: input.duration_minutes || null,
     map_url: input.map_url || null,
     shop_url: input.shop_url || null,
-  }).eq('id', spotId).select('id');
+  }).eq('id', spotId).eq('package_id', packageId).select('id');
 
   if (spotError || !updated || updated.length === 0) {
     console.error('updateCreatorSpot spot failed:', spotError?.message ?? '0 rows affected');
@@ -1432,34 +1496,43 @@ export async function updateCreatorSpot(
     return false;
   }
 
-  // フレーズは削除してから再挿入
-  const { data: oldPhrases } = await supabase
+  // フレーズは削除してから再挿入。
+  // select してから .in() で消す必要はない。1往復で済むうえ、
+  // こちらはエラーも受け取れる（旧実装は削除の失敗を握り潰していた）。
+  const { error: phraseDeleteError } = await supabase
     .from('japanese_phrases')
-    .select('id')
+    .delete()
     .eq('spot_id', spotId);
 
-  if (oldPhrases && oldPhrases.length > 0) {
-    await supabase
-      .from('japanese_phrases')
-      .delete()
-      .in('id', oldPhrases.map((p) => p.id));
+  if (phraseDeleteError) {
+    console.error('updateCreatorSpot phrase delete failed:', phraseDeleteError.message);
+    return false;
   }
 
   for (let i = 0; i < input.phrases.length; i++) {
     const phrase = input.phrases[i];
     if (!phrase.japanese.trim()) continue;
-    const { data: p } = await supabase
+    const { data: p, error: phraseError } = await supabase
       .from('japanese_phrases')
       .insert({ spot_id: spotId, japanese: phrase.japanese, reading: phrase.reading, order: i + 1 })
       .select()
       .single();
-    if (p) {
-      await supabase.from('japanese_phrase_translations').insert({
-        phrase_id: p.id, language: 'ja', meaning: phrase.meaning, context: null,
-      });
+    // ここを握り潰すと、削除は通って挿入が落ちた場合に
+    // フレーズが消えたまま「保存されました」になる
+    if (phraseError || !p) {
+      console.error('updateCreatorSpot phrase insert failed:', phraseError?.message ?? 'no row returned');
+      return false;
+    }
+
+    const { error: meaningError } = await supabase.from('japanese_phrase_translations').insert({
+      phrase_id: p.id, language: 'ja', meaning: phrase.meaning, context: null,
+    });
+    if (meaningError) {
+      console.error('updateCreatorSpot phrase translation insert failed:', meaningError.message);
+      return false;
     }
   }
-  void packageId;
+
   return true;
 }
 

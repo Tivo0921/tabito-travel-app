@@ -378,6 +378,8 @@ export const en: Record<TranslationKey, string> = {
   'pkgEdit.sessionExpired': 'Your session has expired. Please sign in again.',
   'pkgEdit.relogin': 'Sign in',
   'pkgEdit.saveFailed': 'We could not save. Check that this is content you created.',
+  'pkgEdit.saveError': 'Could not save. Check your connection and try again.',
+  'pkgEdit.savePartial': 'Only part of your changes was saved. Please save again.',
   'creator.confirmDelete': 'Delete this package?',
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count} spots',
