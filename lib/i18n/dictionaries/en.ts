@@ -14,6 +14,9 @@ export const en: Record<TranslationKey, string> = {
   'common.loading': 'Loading...',
   'common.settings': 'Settings',
   'common.goHome': 'Go to home',
+  'common.retry': 'Retry',
+  'common.sessionExpired': 'Your session has expired. Please sign in again.',
+  'common.relogin': 'Sign in',
   'common.readTime': '{count} min read',
 
   // Home
@@ -373,8 +376,12 @@ export const en: Record<TranslationKey, string> = {
   'creator.action.publish': 'Publish',
   'creator.action.delete': 'Delete',
   'creator.actionFailed': 'That action did not go through. Check that this is content you created.',
+  'creator.loadFailed': 'Could not load your content. Check your connection and reload the page.',
+  'creator.registerFailed': 'Could not complete creator registration. Please try again in a moment.',
   'pkgEdit.notFound': 'You cannot edit this package. Check that it is one you created.',
   'pkgEdit.saveFailed': 'We could not save. Check that this is content you created.',
+  'pkgEdit.saveError': 'Could not save. Check your connection and try again.',
+  'pkgEdit.savePartial': 'Only part of your changes was saved. Please save again.',
   'creator.confirmDelete': 'Delete this package?',
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count} spots',
