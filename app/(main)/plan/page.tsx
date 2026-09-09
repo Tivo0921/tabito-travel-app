@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import {
   Plus,
   Calendar,
   MapPin,
+  Package as PackageIcon,
   Sparkles,
   ChevronRight,
   Clock,
@@ -23,9 +26,12 @@ import {
   getPlanItems,
   addPlanItem,
   deletePlanItem,
+  getPurchasedPackagesForPlan,
+  addPlanPackage,
 } from '@/lib/supabase/queries';
-import type { Plan, PlanItem } from '@/lib/types';
+import type { Plan, PlanItem, PlanItemPackage } from '@/lib/types';
 import { useT } from '@/lib/i18n/provider';
+import { formatDuration } from '@/lib/i18n/format';
 import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 
 const ITEM_TYPES: { value: PlanItem['item_type']; labelKey: TranslationKey; icon: string }[] = [
@@ -43,6 +49,71 @@ function getDayCount(plan: Plan): number {
   if (!plan.start_date || !plan.end_date) return 1;
   const ms = new Date(plan.end_date).getTime() - new Date(plan.start_date).getTime();
   return Math.max(1, Math.round(ms / 86400000) + 1);
+}
+
+/**
+ * 計画に置いたパッケージ1件。
+ * 計画側はメタな並び（いつ・どの順で）だけを扱い、
+ * 現地での詳細な体験はパッケージの中にあるので、そこへ入れるようにする。
+ */
+function PackageBlock({
+  item,
+  t,
+}: {
+  item: PlanItem;
+  t: ReturnType<typeof useT>;
+}) {
+  const pkg = item.package;
+
+  // pkg が無い理由は2つあり、ユーザーにとって意味が違う。
+  //
+  //   package_id IS NULL … パッケージ自体が削除された（ON DELETE SET NULL）。
+  //                        タイトルだけが行に残る。もう戻らない
+  //   package_id あり     … 行は生きているが JOIN が空。クリエイターが
+  //                        下書きに戻した等で今は参照できないだけで、
+  //                        再公開されれば戻る
+  //
+  // 後者に「削除されました」と出すと、消えていないものを消えたと言うことになる。
+  if (!pkg) {
+    const deleted = item.package_id === null;
+    return (
+      <div>
+        <p className={cn(
+          'font-medium text-[var(--muted)]',
+          deleted && 'line-through',
+        )}>
+          {item.title}
+        </p>
+        <p className="text-xs text-[var(--muted)]">
+          {t(deleted ? 'plan.package.removed' : 'plan.package.unavailable')}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/package/${pkg.id}`} className="block group">
+      <div className="flex gap-3">
+        {pkg.image_url && (
+          <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+            <Image src={pkg.image_url} alt="" fill className="object-cover" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-[var(--text-main)] group-hover:text-[var(--primary)] transition-colors truncate">
+            {pkg.title || item.title}
+          </p>
+          <p className="text-xs text-[var(--text-sub)] truncate">
+            {[pkg.area, pkg.guide_name].filter(Boolean).join(' ・ ')}
+          </p>
+          <p className="text-xs text-[var(--primary)] font-medium flex items-center gap-0.5 mt-0.5">
+            {t('plan.package.spots', { count: pkg.spot_count })}
+            <ChevronRight className="w-3 h-3" />
+          </p>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 export default function PlanPage() {
@@ -69,6 +140,13 @@ export default function PlanPage() {
   const [newItemTime, setNewItemTime] = useState('');
   const [addingItem, setAddingItem] = useState(false);
 
+  // 購入済みパッケージをブロックとして置く #16
+  const [showAddPackage, setShowAddPackage] = useState(false);
+  const [purchased, setPurchased] = useState<PlanItemPackage[]>([]);
+  const [loadingPurchased, setLoadingPurchased] = useState(false);
+  const [addingPackageId, setAddingPackageId] = useState<string | null>(null);
+  const [packageError, setPackageError] = useState<'duplicate' | 'failed' | null>(null);
+
   useEffect(() => {
     getMyPlans().then((data) => {
       setPlans(data);
@@ -91,6 +169,31 @@ export default function PlanPage() {
   const days = Array.from({ length: dayCount }, (_, i) => i + 1);
   const itemsForDay = planItems.filter((item) => item.day === activeDay)
     .sort((a, b) => a.order - b.order);
+
+  /**
+   * その日の最後の予定の「開始時刻 + 所要時間」を次の開始時刻として返す。
+   * 時刻が1つも入っていない日は未指定のままにする（勝手に9:00などを
+   * 置くと、ユーザーが決めた予定のように見えてしまう）。
+   */
+  const suggestedTime = (): string | undefined => {
+    // itemsForDay は order 順。並べ替えると order 上の最後が
+    // 時刻上の最後とは限らないので、終了時刻が最も遅いものを探す。
+    let latestEnd = -1;
+    for (const i of itemsForDay) {
+      if (!i.scheduled_time) continue;
+      const [hh, mm] = i.scheduled_time.split(':').map(Number);
+      if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
+      const end = hh * 60 + mm + (i.duration_minutes ?? 0);
+      if (end > latestEnd) latestEnd = end;
+    }
+    if (latestEnd < 0) return undefined;
+
+    const total = latestEnd;
+    // 日をまたぐ場合は提案しない。翌日の予定として置くべきなので、
+    // 24:30 のような値を作らない
+    if (total >= 24 * 60) return undefined;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  };
 
   const openNewPlanModal = () => {
     setWizardStep(1);
@@ -136,6 +239,30 @@ export default function PlanPage() {
     setNewItemTime('');
     setShowAddItem(false);
     setAddingItem(false);
+  };
+
+  const openAddPackage = async () => {
+    setPackageError(null);
+    setShowAddPackage(true);
+    setLoadingPurchased(true);
+    setPurchased(await getPurchasedPackagesForPlan());
+    setLoadingPurchased(false);
+  };
+
+  const handleAddPackage = async (pkg: PlanItemPackage) => {
+    if (!selectedPlanId) return;
+    setAddingPackageId(pkg.id);
+    setPackageError(null);
+    const result = await addPlanPackage(selectedPlanId, activeDay, pkg, suggestedTime());
+    if (result.ok) {
+      setPlanItems((prev) => [...prev, result.item]);
+      setShowAddPackage(false);
+    } else {
+      // 理由は DB が返したもの。手元の planItems から推測しない
+      // （別タブで追加されていると手元が古く、誤った文言になる）
+      setPackageError(result.reason === 'duplicate' ? 'duplicate' : 'failed');
+    }
+    setAddingPackageId(null);
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -285,18 +412,34 @@ export default function PlanPage() {
                         {index !== itemsForDay.length - 1 && (
                           <div className="absolute left-[23px] top-10 w-0.5 h-[calc(100%+12px)] bg-gray-200" />
                         )}
-                        <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">
-                          {typeIcon(item.item_type)}
+                        <div className={cn(
+                          'w-12 h-12 rounded-xl flex items-center justify-center text-xl flex-shrink-0',
+                          item.item_type === 'package'
+                            ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+                            : 'bg-gray-100',
+                        )}>
+                          {item.item_type === 'package'
+                            ? <PackageIcon className="w-5 h-5" />
+                            : typeIcon(item.item_type)}
                         </div>
-                        <div className="flex-1 pb-3">
-                          <p className="font-medium text-[var(--text-main)]">{item.title}</p>
+
+                        <div className="flex-1 pb-3 min-w-0">
+                          {item.item_type === 'package' ? (
+                            /* パッケージは「中に体験が入っている塊」なので、
+                               ただの予定より情報量を持たせて開けるようにする */
+                            <PackageBlock item={item} t={t} />
+                          ) : (
+                            <p className="font-medium text-[var(--text-main)]">{item.title}</p>
+                          )}
                           {item.scheduled_time && (
-                            <p className="text-sm text-[var(--muted)] flex items-center gap-1">
+                            <p className="text-sm text-[var(--muted)] flex items-center gap-1 mt-1">
                               <Clock className="w-3 h-3" />
                               {item.scheduled_time.slice(0, 5)}
+                              {item.duration_minutes ? ` ・ ${formatDuration(item.duration_minutes, t)}` : ''}
                             </p>
                           )}
                         </div>
+
                         <button
                           onClick={() => handleDeleteItem(item.id)}
                           className="p-1.5 hover:bg-red-50 rounded-lg transition-colors self-start flex-shrink-0"
@@ -308,13 +451,23 @@ export default function PlanPage() {
                   </div>
                 )}
 
-                <button
-                  onClick={() => setShowAddItem(true)}
-                  className="mt-4 w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[var(--border)] rounded-xl text-sm text-[var(--text-sub)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  {t('plan.day.addItem', { day: activeDay })}
-                </button>
+                <div className="mt-4 space-y-2">
+                  {/* 購入したパッケージを置くのが主導線。自由入力より上に出す */}
+                  <button
+                    onClick={openAddPackage}
+                    className="w-full flex items-center justify-center gap-2 py-3 bg-[var(--primary)] text-white rounded-xl text-sm font-medium hover:bg-[var(--primary)]/90 transition-colors"
+                  >
+                    <PackageIcon className="w-4 h-4" />
+                    {t('plan.day.addPackage')}
+                  </button>
+                  <button
+                    onClick={() => setShowAddItem(true)}
+                    className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-[var(--border)] rounded-xl text-sm text-[var(--text-sub)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {t('plan.day.addItem', { day: activeDay })}
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -440,6 +593,104 @@ export default function PlanPage() {
       )}
 
       {/* Add Item Modal */}
+      {/* 購入済みパッケージの選択 #16 */}
+      {showAddPackage && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-end">
+          <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90vh]">
+            <div className="px-6 pt-5 pb-2 flex-shrink-0">
+              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-2" />
+              <h2 className="text-xl font-bold text-[var(--text-main)] mt-2">
+                {t('plan.package.pickTitle')}
+              </h2>
+              <p className="text-sm text-[var(--text-sub)] mt-1">
+                {t('plan.package.pickDesc', { day: activeDay })}
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {packageError && (
+                <p role="alert" className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t(packageError === 'duplicate' ? 'plan.package.duplicate' : 'plan.package.failed')}
+                </p>
+              )}
+
+              {loadingPurchased ? (
+                <p className="text-sm text-[var(--muted)] text-center py-8">{t('common.loading')}</p>
+              ) : purchased.length === 0 ? (
+                <div className="text-center py-8">
+                  <PackageIcon className="w-12 h-12 text-[var(--muted)] mx-auto mb-3" />
+                  <p className="font-medium text-[var(--text-main)]">{t('plan.package.empty')}</p>
+                  <p className="text-sm text-[var(--text-sub)] mt-1 mb-4">{t('plan.package.emptyDesc')}</p>
+                  <Link
+                    href="/explore"
+                    className="inline-block px-6 py-3 bg-[var(--primary)] text-white rounded-2xl font-semibold"
+                  >
+                    {t('plan.package.explore')}
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {purchased.map((pkg) => {
+                    // 既にこの計画に入っているものは押せなくする。
+                    // 押せてしまうと UNIQUE 制約でエラーになるだけで、
+                    // なぜ入らないのかが分からない
+                    const already = planItems.some((i) => i.package_id === pkg.id);
+                    return (
+                      <button
+                        key={pkg.id}
+                        onClick={() => handleAddPackage(pkg)}
+                        disabled={already || addingPackageId !== null}
+                        className={cn(
+                          'w-full flex gap-3 p-3 rounded-2xl border text-left transition-colors',
+                          already
+                            ? 'border-[var(--border)] bg-gray-50 opacity-60'
+                            : 'border-[var(--border)] hover:border-[var(--primary)]',
+                          addingPackageId === pkg.id && 'opacity-50',
+                        )}
+                      >
+                        <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                          {pkg.image_url ? (
+                            <Image src={pkg.image_url} alt="" fill className="object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <PackageIcon className="w-6 h-6 text-gray-300" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 self-center">
+                          <p className="font-medium text-[var(--text-main)] truncate">{pkg.title}</p>
+                          <p className="text-xs text-[var(--text-sub)] truncate">
+                            {[pkg.area, pkg.guide_name].filter(Boolean).join(' ・ ')}
+                          </p>
+                          <p className="text-xs text-[var(--muted)] mt-0.5">
+                            {t('plan.package.spots', { count: pkg.spot_count })}
+                            {pkg.duration_minutes ? ` ・ ${formatDuration(pkg.duration_minutes, t)}` : ''}
+                          </p>
+                        </div>
+                        {already && (
+                          <span className="self-center flex-shrink-0 text-xs text-[var(--muted)] font-medium">
+                            {t('plan.package.added')}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 pt-3 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] border-t border-gray-100 flex-shrink-0">
+              <button
+                onClick={() => setShowAddPackage(false)}
+                className="w-full py-3 border border-[var(--border)] rounded-2xl font-medium text-sm"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showAddItem && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-end">
           <div className="w-full bg-white rounded-t-3xl flex flex-col max-h-[90vh]">
