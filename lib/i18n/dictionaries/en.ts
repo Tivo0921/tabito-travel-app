@@ -136,6 +136,7 @@ export const en: Record<TranslationKey, string> = {
   'plan.package.spots': 'See {count} spots inside',
   'plan.package.spots_one': 'See {count} spot inside',
   'plan.package.removed': 'This package is no longer available',
+  'plan.package.unavailable': 'This package is not available right now (it may have been unpublished).',
   'plan.package.pickTitle': 'Which package?',
   'plan.package.pickDesc': 'Place a package you own on Day {day}',
   'plan.package.empty': 'You have not bought any packages yet',

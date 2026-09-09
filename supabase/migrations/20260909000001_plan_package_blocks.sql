@@ -55,14 +55,24 @@ ALTER TABLE plan_items
   CHECK (item_type IN ('spot', 'meal', 'transport', 'manner', 'package'));
 
 -- ────────────────────────────────────────────────
--- 3. package_id は 'package' の行だけが持つ
+-- 3. package_id を持てるのは 'package' の行だけ
 --    他の種別に紛れ込むと、表示側がブロックとして描くか
 --    ただの予定として描くかを判断できなくなる。
+--
+--    ここで 'package' の行に package_id IS NOT NULL を要求してはいけない。
+--    上の ON DELETE SET NULL と両立せず、パッケージを削除したときに
+--    SET NULL の UPDATE がこの CHECK に弾かれて削除ごと失敗する。
+--    （その場合 deleteCreatorPackage が false を返し、UI には
+--      「自分が作成したコンテンツか確認してください」という
+--      原因と無関係な文言が出る）
+--
+--    パッケージが消えた後は item_type='package' / package_id=NULL /
+--    タイトルだけ残る、という行になる。表示側はこれを
+--    「もう無いパッケージ」として描く。
 -- ────────────────────────────────────────────────
 ALTER TABLE plan_items
   ADD CONSTRAINT plan_items_package_id_only_for_package CHECK (
-    (item_type = 'package' AND package_id IS NOT NULL)
-    OR (item_type <> 'package' AND package_id IS NULL)
+    item_type = 'package' OR package_id IS NULL
   );
 
 -- ────────────────────────────────────────────────

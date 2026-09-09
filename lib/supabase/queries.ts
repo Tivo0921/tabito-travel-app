@@ -735,7 +735,7 @@ export async function deletePlan(planId: string): Promise<void> {
   await supabase.from('plans').delete().eq('id', planId);
 }
 
-export async function getPlanItems(planId: string, lang = DEFAULT_LANG): Promise<PlanItem[]> {
+export async function getPlanItems(planId: string): Promise<PlanItem[]> {
   const supabase = createClient();
   // パッケージブロックは中身（画像・エリア・スポット数・ガイド名）を
   // 出したいので一緒に引く。package_id が無い行では null になる。
@@ -751,7 +751,11 @@ export async function getPlanItems(planId: string, lang = DEFAULT_LANG): Promise
       )
     `)
     .eq('plan_id', planId)
-    .eq('packages.package_translations.language', lang)
+    // package_translations は 'ja' しか入らない（createCreatorPackage /
+    // updateCreatorPackage が language: 'ja' 固定で書く）。UIロケールで
+    // 絞ると en/ko でタイトルが空になる。CLAUDE.md のとおり、DB由来の
+    // コンテンツは投稿された言語のまま出す
+    .eq('packages.package_translations.language', DEFAULT_LANG)
     .order('day', { ascending: true })
     .order('order', { ascending: true });
 
@@ -840,9 +844,7 @@ export async function addPlanItem(
  * 有料コンテンツの中身が計画経由で漏れないよう、購入したものだけを返す。
  * status = 'completed' に限る（pending は決済が通っていない）。
  */
-export async function getPurchasedPackagesForPlan(
-  lang = DEFAULT_LANG,
-): Promise<PlanItemPackage[]> {
+export async function getPurchasedPackagesForPlan(): Promise<PlanItemPackage[]> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
@@ -860,7 +862,8 @@ export async function getPurchasedPackagesForPlan(
     `)
     .eq('user_id', user.id)
     .eq('status', 'completed')
-    .eq('packages.package_translations.language', lang)
+    // ここも同じ。UIロケールでは絞らない（getPlanItems のコメント参照）
+    .eq('packages.package_translations.language', DEFAULT_LANG)
     .order('purchased_at', { ascending: false });
 
   if (error || !data) {
@@ -883,12 +886,16 @@ export async function getPurchasedPackagesForPlan(
  * 所要時間もここで写す。行程の時刻計算に使うので、
  * パッケージ側が後から変わっても既に組んだ予定が動かない方が良い。
  */
+export type AddPlanPackageResult =
+  | { ok: true; item: PlanItem }
+  | { ok: false; reason: 'duplicate' | 'error' };
+
 export async function addPlanPackage(
   planId: string,
   day: number,
   pkg: PlanItemPackage,
   scheduledTime?: string,
-): Promise<PlanItem | null> {
+): Promise<AddPlanPackageResult> {
   const supabase = createClient();
 
   const { data: existing } = await supabase
@@ -917,13 +924,15 @@ export async function addPlanPackage(
     .single();
 
   if (error || !data) {
-    // 同じ計画に同じパッケージを二重に置こうとすると
-    // plan_items_unique_package_per_plan で 23505 が返る
     console.error('addPlanPackage error:', error?.code, error?.message);
-    return null;
+    // 23505 = plan_items_unique_package_per_plan 違反。
+    // 「既に入っている」かを呼び出し側の手元の状態から推測すると、
+    // 別タブで追加された場合など手元が古いときに誤った文言になる。
+    // DB が返した理由をそのまま渡す。
+    return { ok: false, reason: error?.code === '23505' ? 'duplicate' : 'error' };
   }
 
-  return {
+  const item = {
     id: data.id,
     plan_id: data.plan_id,
     day: data.day,
@@ -937,6 +946,8 @@ export async function addPlanPackage(
     package_id: data.package_id,
     package: pkg,
   } satisfies PlanItem;
+
+  return { ok: true, item };
 }
 
 export async function deletePlanItem(itemId: string): Promise<void> {

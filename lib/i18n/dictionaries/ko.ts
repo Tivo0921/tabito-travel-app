@@ -136,6 +136,7 @@ export const ko: Record<TranslationKey, string> = {
   'plan.package.spots': '{count}개 스폿 체험 보기',
   'plan.package.spots_one': '{count}개 스폿 체험 보기',
   'plan.package.removed': '이 패키지는 제공이 종료되었습니다',
+  'plan.package.unavailable': '이 패키지는 현재 표시할 수 없습니다(비공개 상태일 수 있습니다)',
   'plan.package.pickTitle': '어떤 패키지를 넣을까요',
   'plan.package.pickDesc': '구매한 패키지를 Day {day}에 배치합니다',
   'plan.package.empty': '아직 구매한 패키지가 없습니다',

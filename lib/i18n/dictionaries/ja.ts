@@ -140,6 +140,7 @@ export const ja = {
   'plan.package.spots': '{count}スポットの体験を見る',
   'plan.package.spots_one': '{count}スポットの体験を見る',
   'plan.package.removed': 'このパッケージは配信を終了しました',
+  'plan.package.unavailable': 'このパッケージは現在表示できません（非公開になっている可能性があります）',
   'plan.package.pickTitle': 'どのパッケージを置きますか',
   'plan.package.pickDesc': '購入済みのパッケージを Day {day} に置きます',
   'plan.package.empty': 'まだパッケージを購入していません',

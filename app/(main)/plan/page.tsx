@@ -30,7 +30,7 @@ import {
   addPlanPackage,
 } from '@/lib/supabase/queries';
 import type { Plan, PlanItem, PlanItemPackage } from '@/lib/types';
-import { useT, useLocale } from '@/lib/i18n/provider';
+import { useT } from '@/lib/i18n/provider';
 import { formatDuration } from '@/lib/i18n/format';
 import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 
@@ -65,13 +65,28 @@ function PackageBlock({
 }) {
   const pkg = item.package;
 
-  // package_id は ON DELETE SET NULL。パッケージが消えると
-  // タイトルだけが行に残る。黙って消さず、消えたことが分かる形で出す
+  // pkg が無い理由は2つあり、ユーザーにとって意味が違う。
+  //
+  //   package_id IS NULL … パッケージ自体が削除された（ON DELETE SET NULL）。
+  //                        タイトルだけが行に残る。もう戻らない
+  //   package_id あり     … 行は生きているが JOIN が空。クリエイターが
+  //                        下書きに戻した等で今は参照できないだけで、
+  //                        再公開されれば戻る
+  //
+  // 後者に「削除されました」と出すと、消えていないものを消えたと言うことになる。
   if (!pkg) {
+    const deleted = item.package_id === null;
     return (
       <div>
-        <p className="font-medium text-[var(--muted)] line-through">{item.title}</p>
-        <p className="text-xs text-[var(--muted)]">{t('plan.package.removed')}</p>
+        <p className={cn(
+          'font-medium text-[var(--muted)]',
+          deleted && 'line-through',
+        )}>
+          {item.title}
+        </p>
+        <p className="text-xs text-[var(--muted)]">
+          {t(deleted ? 'plan.package.removed' : 'plan.package.unavailable')}
+        </p>
       </div>
     );
   }
@@ -103,7 +118,6 @@ function PackageBlock({
 
 export default function PlanPage() {
   const t = useT();
-  const { locale } = useLocale();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
@@ -145,11 +159,10 @@ export default function PlanPage() {
 
   useEffect(() => {
     if (selectedPlanId) {
-      // パッケージのタイトルは locale で引くので、言語を変えたら引き直す
-      getPlanItems(selectedPlanId, locale).then(setPlanItems);
+      getPlanItems(selectedPlanId).then(setPlanItems);
       setActiveDay(1);
     }
-  }, [selectedPlanId, locale]);
+  }, [selectedPlanId]);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
   const dayCount = selectedPlan ? getDayCount(selectedPlan) : 1;
@@ -163,12 +176,19 @@ export default function PlanPage() {
    * 置くと、ユーザーが決めた予定のように見えてしまう）。
    */
   const suggestedTime = (): string | undefined => {
-    const withTime = itemsForDay.filter((i) => i.scheduled_time);
-    const last = withTime[withTime.length - 1];
-    if (!last?.scheduled_time) return undefined;
+    // itemsForDay は order 順。並べ替えると order 上の最後が
+    // 時刻上の最後とは限らないので、終了時刻が最も遅いものを探す。
+    let latestEnd = -1;
+    for (const i of itemsForDay) {
+      if (!i.scheduled_time) continue;
+      const [hh, mm] = i.scheduled_time.split(':').map(Number);
+      if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
+      const end = hh * 60 + mm + (i.duration_minutes ?? 0);
+      if (end > latestEnd) latestEnd = end;
+    }
+    if (latestEnd < 0) return undefined;
 
-    const [h, m] = last.scheduled_time.split(':').map(Number);
-    const total = h * 60 + m + (last.duration_minutes ?? 0);
+    const total = latestEnd;
     // 日をまたぐ場合は提案しない。翌日の予定として置くべきなので、
     // 24:30 のような値を作らない
     if (total >= 24 * 60) return undefined;
@@ -225,7 +245,7 @@ export default function PlanPage() {
     setPackageError(null);
     setShowAddPackage(true);
     setLoadingPurchased(true);
-    setPurchased(await getPurchasedPackagesForPlan(locale));
+    setPurchased(await getPurchasedPackagesForPlan());
     setLoadingPurchased(false);
   };
 
@@ -233,15 +253,14 @@ export default function PlanPage() {
     if (!selectedPlanId) return;
     setAddingPackageId(pkg.id);
     setPackageError(null);
-    const item = await addPlanPackage(selectedPlanId, activeDay, pkg, suggestedTime());
-    if (item) {
-      setPlanItems((prev) => [...prev, item]);
+    const result = await addPlanPackage(selectedPlanId, activeDay, pkg, suggestedTime());
+    if (result.ok) {
+      setPlanItems((prev) => [...prev, result.item]);
       setShowAddPackage(false);
     } else {
-      // 失敗の大半は同じ計画に同じパッケージを二重に置いた場合。
-      // 既に置いてあるかは手元の planItems で判断できる
-      const already = planItems.some((i) => i.package_id === pkg.id);
-      setPackageError(already ? 'duplicate' : 'failed');
+      // 理由は DB が返したもの。手元の planItems から推測しない
+      // （別タブで追加されていると手元が古く、誤った文言になる）
+      setPackageError(result.reason === 'duplicate' ? 'duplicate' : 'failed');
     }
     setAddingPackageId(null);
   };
