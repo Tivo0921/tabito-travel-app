@@ -26,7 +26,7 @@
 | `main` | **production** | https://tabito.site / www.tabito.site | push・マージで自動 |
 | その他 | preview | ランダムURL | push で自動 |
 
-- Vercel プロジェクト: `tabito-travel-app` (`prj_53a1hcsYHJydlQtVzXQB0yOWxjLg`)
+- Vercel プロジェクト: `tabito-travel-app`（プロジェクトIDは `vercel project inspect` で確認）
 - Production Branch 設定 = `main`
 - `stg.tabito.site` は `staging` ブランチに紐づけた**ブランチドメイン**なので、
   staging に push するたび同じURLが最新に差し替わる
@@ -101,13 +101,17 @@ gh pr create --base main --head staging
 
 **PRをマージする前に**、対象環境の Supabase へ手で適用する:
 
-| マージ先 | 対象のSupabase | project-ref |
-|---|---|---|
-| `staging` | stg (`TABITO-stg`) | `oqtvjmongyuyaoqckdyy` |
-| `main` | **本番** (`TABITO`) | `toyzerxkavsgomcbgujj` |
+| マージ先 | 対象のSupabase |
+|---|---|
+| `staging` | stg (`TABITO-stg`) |
+| `main` | **本番** (`TABITO`) |
+
+**project-ref はこのリポジトリに書かない**（公開リポジトリのため）。
+`supabase projects list` で名前と ref の対応を引いてから link する:
 
 ```bash
-supabase link --project-ref oqtvjmongyuyaoqckdyy   # stg の例
+supabase projects list                  # TABITO-stg / TABITO の ref を確認
+supabase link --project-ref <上で確認したref>
 supabase db push
 ```
 

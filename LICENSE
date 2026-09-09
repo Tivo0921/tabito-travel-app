@@ -1,0 +1,45 @@
+All Rights Reserved
+
+Copyright (c) 2026 Shun Ikeda and Jeongwon Yun (ユンジョンウォン)
+
+このリポジトリのソースコード、デザイン、ドキュメント、および
+`public/` 以下のロゴ・ブランド素材を含むすべての著作物（以下「本ソフトウェア」）の
+著作権は、本ソフトウェアを共同で開発した著作権者両名
+（池田駿 / ユンジョンウォン）が共同で保有します。
+
+本ソフトウェアは、閲覧および評価（ポートフォリオとしての参照、技術的な学習を
+目的とした読解）のためにのみ公開されています。
+
+著作権者両名による事前の書面（電子メールを含む）による許諾がない限り、
+以下の行為を禁止します:
+
+  - 本ソフトウェアの全部または一部の複製、転載、再配布
+  - 本ソフトウェアの全部または一部を用いた派生物の作成
+  - 商用・非商用を問わない、本ソフトウェアの使用および運用
+  - 本ソフトウェアの全部または一部の販売、貸与、サブライセンス
+  - "TABITO" の名称およびロゴの使用
+
+本ソフトウェアは現状有姿で提供され、明示または黙示を問わず、商品性、
+特定目的への適合性、権利非侵害を含むいかなる保証も伴いません。
+著作権者両名は、本ソフトウェアに起因するいかなる請求・損害・その他の責任についても
+一切の責任を負いません。
+
+--------------------------------------------------------------------------
+
+All rights in and to this software, including its source code, design,
+documentation, and the brand assets under `public/`, are jointly owned and
+reserved by its co-authors, Shun Ikeda and Jeongwon Yun.
+
+This repository is made public solely for viewing and evaluation purposes
+(portfolio review and technical study). No license is granted to copy,
+modify, redistribute, create derivative works from, or otherwise use this
+software, in whole or in part, for any purpose, commercial or otherwise,
+without the prior written permission of both copyright holders. The "TABITO"
+name and logo may not be used without permission.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. THE COPYRIGHT HOLDERS SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+Third-party dependencies listed in `package.json` remain under their own
+respective licenses.
