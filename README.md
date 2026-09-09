@@ -28,6 +28,23 @@
 
 UI は **日本語・英語・韓国語**の3言語に対応している。
 
+## 画面
+
+<table>
+<tr>
+<td width="25%"><img src="docs/screenshots/home.png" alt="ホーム" /></td>
+<td width="25%"><img src="docs/screenshots/explore.png" alt="探索" /></td>
+<td width="25%"><img src="docs/screenshots/package.png" alt="パッケージ詳細" /></td>
+<td width="25%"><img src="docs/screenshots/plan.png" alt="旅行計画" /></td>
+</tr>
+<tr>
+<td align="center"><b>ホーム</b><br/>おすすめのガイドを提示</td>
+<td align="center"><b>探索</b><br/>エリア・カテゴリで絞り込み</td>
+<td align="center"><b>パッケージ詳細</b><br/>購入とガイドへの導線</td>
+<td align="center"><b>旅行計画</b><br/>購入したコースを日程に配置</td>
+</tr>
+</table>
+
 ## 主な機能
 
 | | |
@@ -182,7 +199,7 @@ npx tsc --noEmit  # CI と同じ型チェック
 
 ## ライセンス
 
-**All Rights Reserved.** © 2026 Shun Ikeda and Jeongwon Yun
+**All Rights Reserved.** © 2026 Shun Ikeda and Yoon Jungwon
 
 本アプリは 池田駿 と ユンジョンウォン の2名による共同開発で、
 著作権は両名が共同で保有しています。
