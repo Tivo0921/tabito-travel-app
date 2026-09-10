@@ -19,10 +19,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
+import { PlacePicker } from '@/components/place-picker';
 import {
   createCreatorPackage,
   updateCreatorPackage,
   type SaveResult,
+  type CreatorPackageInput,
   getCreatorPackageWithSpots,
   createCreatorSpot,
   updateCreatorSpot,
@@ -31,7 +33,7 @@ import {
   getAreas,
   getCategories,
 } from '@/lib/supabase/queries';
-import type { Spot, CreatorSpotInput, Area, Category } from '@/lib/types';
+import type { Spot, CreatorSpotInput, Area, Category, PackagePlace } from '@/lib/types';
 import { useT } from '@/lib/i18n/provider';
 
 const EMPTY_SPOT: CreatorSpotInput = {
@@ -71,6 +73,9 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
   const [categoryId, setCategoryId] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [durationHours, setDurationHours] = useState('');
+  // 開始/終了地点。null = 未設定（未設定のまま保存できる）#16
+  const [startPlace, setStartPlace] = useState<PackagePlace | null>(null);
+  const [endPlace, setEndPlace] = useState<PackagePlace | null>(null);
   const [infoSaved, setInfoSaved] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
   // null = エラーなし。'ok' は成功なのでここには入らない。
@@ -110,6 +115,8 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       setImageUrl(p.image_url);
       // 分をそのまま持つので、表示用文字列を parseInt する必要がない
       setDurationHours(p.duration_minutes ? String(p.duration_minutes / 60) : '');
+      setStartPlace(p.start_place);
+      setEndPlace(p.end_place);
       setStatus(p.status as 'draft' | 'published');
       setInfoSaved(true);
     } else if (reason === 'unauthenticated') {
@@ -148,10 +155,21 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
     const durationMin = durationHours ? Math.round(parseFloat(durationHours) * 60) : null;
     const priceNum = parseInt(price) || 0;
 
+    const input: CreatorPackageInput = {
+      title,
+      areaId,
+      price: priceNum,
+      shortDescription: shortDesc,
+      description,
+      categoryId,
+      imageUrl,
+      durationMinutes: durationMin,
+      startPlace,
+      endPlace,
+    };
+
     if (!packageId) {
-      const created = await createCreatorPackage(
-        guideId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin,
-      );
+      const created = await createCreatorPackage(guideId, input);
       // 新規作成も同じ扱い。guide が未指定/他人のものだと INSERT が RLS に
       // 弾かれる（forbidden）が、通信エラーまで所有権を疑う文言にしない
       setInfoSaved(created.result === 'ok');
@@ -162,7 +180,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
       }
     } else {
       // 失敗を「保存済み ✓」で覆い隠さない
-      const result = await updateCreatorPackage(packageId, title, areaId, priceNum, shortDesc, description, categoryId, imageUrl, durationMin);
+      const result = await updateCreatorPackage(packageId, input);
       setInfoSaved(result === 'ok');
       setSaveError(result === 'ok' ? null : result);
     }
@@ -428,6 +446,21 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
                 />
               </div>
             </div>
+            {/* 開始/終了地点。計画側で「Aの終了地点→Bの開始地点」の
+                移動を計算するために使う。未設定でも保存できる #16 */}
+            <div className="space-y-4">
+              <PlacePicker
+                label={t('pkgEdit.startPlace')}
+                value={startPlace}
+                onChange={setStartPlace}
+              />
+              <PlacePicker
+                label={t('pkgEdit.endPlace')}
+                value={endPlace}
+                onChange={setEndPlace}
+              />
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-[var(--text-sub)] mb-1.5">{t('pkgEdit.thumbnail')}</label>
               <input

@@ -2,6 +2,7 @@ import { createClient } from './client';
 import type {
   Guide,
   Package,
+  PackagePlace,
   Spot,
   JapanesePhrase,
   Review,
@@ -11,6 +12,7 @@ import type {
   CommunityRoute,
   Plan,
   PlanItem,
+  PlanItemPackage,
   Purchase,
   CreatorSpotInput,
   Area,
@@ -130,6 +132,7 @@ export async function getPackages(lang = DEFAULT_LANG): Promise<Package[]> {
       features: row.features,
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
+      ...packagePlaces(row),
     } satisfies Package;
   });
 }
@@ -199,12 +202,59 @@ export async function getPackageById(id: string, lang = DEFAULT_LANG): Promise<P
     features: data.features,
     tutorial_video_url: data.tutorial_video_url ?? undefined,
     created_at: data.created_at,
+    ...packagePlaces(data),
   } satisfies Package;
 }
 
 // ────────────────────────────────────────────────
 // Spots
 // ────────────────────────────────────────────────
+
+/**
+ * numeric 列を number|null に寄せる。
+ * PostgREST は numeric を文字列で返すことがあり、そのまま渡すと
+ * 距離計算が文字列連結になる。空文字・NaN も null に倒す。
+ */
+function coord(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * パッケージの開始/終了地点を組み立てる。
+ * DB の CHECK で4点セットは揃っている前提だが、片方でも欠けたら
+ * null にして「未設定」に倒す。半端な地点を経路計算に渡さない。
+ */
+function packagePlace(
+  placeId: string | null,
+  name: string | null,
+  lat: unknown,
+  lng: unknown,
+): PackagePlace | null {
+  if (!placeId || !name) return null;
+  const latitude = coord(lat);
+  const longitude = coord(lng);
+  if (latitude === null || longitude === null) return null;
+  return { place_id: placeId, name, latitude, longitude };
+}
+
+/** Package のマッパー全部で同じ2項目を作るのでまとめる */
+function packagePlaces(row: {
+  start_place_id: string | null;
+  start_place_name: string | null;
+  start_latitude: number | null;
+  start_longitude: number | null;
+  end_place_id: string | null;
+  end_place_name: string | null;
+  end_latitude: number | null;
+  end_longitude: number | null;
+}): Pick<Package, 'start_place' | 'end_place'> {
+  return {
+    start_place: packagePlace(row.start_place_id, row.start_place_name, row.start_latitude, row.start_longitude),
+    end_place: packagePlace(row.end_place_id, row.end_place_name, row.end_latitude, row.end_longitude),
+  };
+}
 
 export async function getSpotsByPackageId(packageId: string, lang = DEFAULT_LANG): Promise<Spot[]> {
   const supabase = createClient();
@@ -641,6 +691,39 @@ export async function getCommunityRouteById(id: string, lang = DEFAULT_LANG): Pr
 // Plans (旅行計画)
 // ────────────────────────────────────────────────
 
+/**
+ * plan_items にぶら下げたパッケージ行を表示用に整える。
+ * PostgREST は 1対1 のリレーションでも配列で返すことがあるので、
+ * 呼び出し側で形を揃えてから渡す前提にしている。
+ */
+function planItemPackage(row: {
+  id: string;
+  image_url: string | null;
+  spot_count: number;
+  duration_minutes: number | null;
+  areas: unknown;
+  package_translations: unknown;
+  guides: unknown;
+}): PlanItemPackage {
+  const t = Array.isArray(row.package_translations)
+    ? row.package_translations[0]
+    : row.package_translations;
+  const guide = Array.isArray(row.guides) ? row.guides[0] : row.guides;
+  const guideTrans = guide
+    ? (Array.isArray(guide.guide_translations) ? guide.guide_translations[0] : guide.guide_translations)
+    : null;
+
+  return {
+    id: row.id,
+    title: (t as { title?: string } | null)?.title ?? '',
+    image_url: row.image_url ?? '',
+    area: relName(row.areas),
+    spot_count: row.spot_count,
+    duration_minutes: row.duration_minutes,
+    guide_name: (guideTrans as { name?: string } | null)?.name ?? '',
+  } satisfies PlanItemPackage;
+}
+
 export async function getMyPlans(): Promise<Plan[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -703,10 +786,25 @@ export async function deletePlan(planId: string): Promise<void> {
 
 export async function getPlanItems(planId: string): Promise<PlanItem[]> {
   const supabase = createClient();
+  // パッケージブロックは中身（画像・エリア・スポット数・ガイド名）を
+  // 出したいので一緒に引く。package_id が無い行では null になる。
   const { data, error } = await supabase
     .from('plan_items')
-    .select('*')
+    .select(`
+      *,
+      packages(
+        id, image_url, spot_count, duration_minutes,
+        areas(name),
+        package_translations(title),
+        guides(guide_translations(name))
+      )
+    `)
     .eq('plan_id', planId)
+    // package_translations は 'ja' しか入らない（createCreatorPackage /
+    // updateCreatorPackage が language: 'ja' 固定で書く）。UIロケールで
+    // 絞ると en/ko でタイトルが空になる。CLAUDE.md のとおり、DB由来の
+    // コンテンツは投稿された言語のまま出す
+    .eq('packages.package_translations.language', DEFAULT_LANG)
     .order('day', { ascending: true })
     .order('order', { ascending: true });
 
@@ -715,18 +813,26 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
     return [];
   }
 
-  return data.map((row) => ({
-    id: row.id,
-    plan_id: row.plan_id,
-    day: row.day,
-    order: row.order,
-    item_type: row.item_type as PlanItem['item_type'],
-    title: row.title,
-    scheduled_time: row.scheduled_time,
-    duration_minutes: row.duration_minutes,
-    spot_id: row.spot_id,
-    manner_tip_id: row.manner_tip_id,
-  } satisfies PlanItem));
+  return data.map((row) => {
+    const pkg = Array.isArray(row.packages) ? row.packages[0] : row.packages;
+    return {
+      id: row.id,
+      plan_id: row.plan_id,
+      day: row.day,
+      order: row.order,
+      item_type: row.item_type as PlanItem['item_type'],
+      title: row.title,
+      scheduled_time: row.scheduled_time,
+      duration_minutes: row.duration_minutes,
+      spot_id: row.spot_id,
+      manner_tip_id: row.manner_tip_id,
+      package_id: row.package_id,
+      // パッケージが削除されると package_id は SET NULL になり、
+      // タイトルだけが行に残る。ここも undefined になるので、
+      // 表示側は「もう無いパッケージ」として描ける
+      package: pkg ? planItemPackage(pkg) : undefined,
+    } satisfies PlanItem;
+  });
 }
 
 export async function addPlanItem(
@@ -778,7 +884,119 @@ export async function addPlanItem(
     duration_minutes: data.duration_minutes,
     spot_id: data.spot_id,
     manner_tip_id: data.manner_tip_id,
+    package_id: data.package_id,
   } satisfies PlanItem;
+}
+
+/**
+ * 計画に置ける購入済みパッケージ。
+ * 有料コンテンツの中身が計画経由で漏れないよう、購入したものだけを返す。
+ * status = 'completed' に限る（pending は決済が通っていない）。
+ */
+export async function getPurchasedPackagesForPlan(): Promise<PlanItemPackage[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('purchases')
+    .select(`
+      package_id,
+      packages!inner(
+        id, image_url, spot_count, duration_minutes,
+        areas(name),
+        package_translations(title),
+        guides(guide_translations(name))
+      )
+    `)
+    .eq('user_id', user.id)
+    .eq('status', 'completed')
+    // ここも同じ。UIロケールでは絞らない（getPlanItems のコメント参照）
+    .eq('packages.package_translations.language', DEFAULT_LANG)
+    .order('purchased_at', { ascending: false });
+
+  if (error || !data) {
+    console.error('getPurchasedPackagesForPlan error:', error);
+    return [];
+  }
+
+  return data
+    .map((row) => (Array.isArray(row.packages) ? row.packages[0] : row.packages))
+    .filter((pkg): pkg is NonNullable<typeof pkg> => Boolean(pkg))
+    .map(planItemPackage);
+}
+
+/**
+ * 計画にパッケージをブロックとして置く。
+ *
+ * タイトルは行に焼き付ける。パッケージが後で削除されると
+ * package_id は SET NULL になるが、「何を置いていたか」は残る。
+ *
+ * 所要時間もここで写す。行程の時刻計算に使うので、
+ * パッケージ側が後から変わっても既に組んだ予定が動かない方が良い。
+ */
+export type AddPlanPackageResult =
+  | { ok: true; item: PlanItem }
+  | { ok: false; reason: 'duplicate' | 'error' };
+
+export async function addPlanPackage(
+  planId: string,
+  day: number,
+  pkg: PlanItemPackage,
+  scheduledTime?: string,
+): Promise<AddPlanPackageResult> {
+  const supabase = createClient();
+
+  const { data: existing } = await supabase
+    .from('plan_items')
+    .select('order')
+    .eq('plan_id', planId)
+    .eq('day', day)
+    .order('order', { ascending: false })
+    .limit(1);
+
+  const nextOrder = existing && existing.length > 0 ? existing[0].order + 1 : 1;
+
+  const { data, error } = await supabase
+    .from('plan_items')
+    .insert({
+      plan_id: planId,
+      day,
+      order: nextOrder,
+      item_type: 'package',
+      title: pkg.title,
+      package_id: pkg.id,
+      duration_minutes: pkg.duration_minutes,
+      scheduled_time: scheduledTime || null,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    console.error('addPlanPackage error:', error?.code, error?.message);
+    // 23505 = plan_items_unique_package_per_plan 違反。
+    // 「既に入っている」かを呼び出し側の手元の状態から推測すると、
+    // 別タブで追加された場合など手元が古いときに誤った文言になる。
+    // DB が返した理由をそのまま渡す。
+    return { ok: false, reason: error?.code === '23505' ? 'duplicate' : 'error' };
+  }
+
+  const item = {
+    id: data.id,
+    plan_id: data.plan_id,
+    day: data.day,
+    order: data.order,
+    item_type: 'package',
+    title: data.title,
+    scheduled_time: data.scheduled_time,
+    duration_minutes: data.duration_minutes,
+    spot_id: data.spot_id,
+    manner_tip_id: data.manner_tip_id,
+    package_id: data.package_id,
+    package: pkg,
+  } satisfies PlanItem;
+
+  return { ok: true, item };
 }
 
 export async function deletePlanItem(itemId: string): Promise<void> {
@@ -857,6 +1075,7 @@ export async function getSavedPackages(lang = DEFAULT_LANG): Promise<Package[]> 
       features: row.features,
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
+      ...packagePlaces(row),
     } satisfies Package;
   });
 }
@@ -1117,6 +1336,7 @@ export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
       status: row.status,
+      ...packagePlaces(row),
     } satisfies Package & { status: string };
   });
 
@@ -1132,16 +1352,45 @@ export type CreatePackageResult =
   | { id: string; result: 'ok' }
   | { id: null; result: 'forbidden' | 'error' };
 
+/**
+ * パッケージの基本情報の入力。
+ *
+ * 位置引数を並べていたが、開始/終了地点で項目が増えて17個になり
+ * 実用に耐えなくなったのでオブジェクトにまとめた。呼び出し元は
+ * クリエイターの編集画面1箇所だけ。
+ *
+ * 地点は未設定（null）を許す。既存パッケージは全て未設定から始まり、
+ * 設定しなくても保存できる必要がある。
+ */
+export interface CreatorPackageInput {
+  title: string;
+  areaId: string;
+  price: number;
+  shortDescription: string;
+  description: string;
+  categoryId: string;
+  imageUrl: string;
+  durationMinutes: number | null;
+  startPlace: PackagePlace | null;
+  endPlace: PackagePlace | null;
+}
+
+/**
+ * 地点を DB の列に展開する。
+ * 4点セットで入るか、4つとも null。DB の CHECK と同じ約束を守る。
+ */
+function placeColumns(prefix: 'start' | 'end', place: PackagePlace | null) {
+  return {
+    [`${prefix}_place_id`]: place?.place_id ?? null,
+    [`${prefix}_place_name`]: place?.name ?? null,
+    [`${prefix}_latitude`]: place?.latitude ?? null,
+    [`${prefix}_longitude`]: place?.longitude ?? null,
+  };
+}
+
 export async function createCreatorPackage(
   guideId: string,
-  title: string,
-  areaId: string,
-  price: number,
-  shortDescription: string,
-  description: string,
-  categoryId: string,
-  imageUrl: string,
-  durationMinutes: number | null,
+  input: CreatorPackageInput,
 ): Promise<CreatePackageResult> {
   const supabase = createClient();
 
@@ -1149,15 +1398,17 @@ export async function createCreatorPackage(
     .from('packages')
     .insert({
       guide_id: guideId,
-      area_id: areaId,
-      price,
+      area_id: input.areaId,
+      price: input.price,
       currency: 'JPY',
-      category_id: categoryId || null,
-      image_url: imageUrl || null,
-      duration_minutes: durationMinutes,
+      category_id: input.categoryId || null,
+      image_url: input.imageUrl || null,
+      duration_minutes: input.durationMinutes,
       status: 'draft',
       tags: [],
       features: [],
+      ...placeColumns('start', input.startPlace),
+      ...placeColumns('end', input.endPlace),
     })
     .select()
     .single();
@@ -1172,9 +1423,9 @@ export async function createCreatorPackage(
   const { error: transError } = await supabase.from('package_translations').insert({
     package_id: pkg.id,
     language: 'ja',
-    title,
-    short_description: shortDescription,
-    description,
+    title: input.title,
+    short_description: input.shortDescription,
+    description: input.description,
   });
 
   if (transError) {
@@ -1206,14 +1457,7 @@ export type SaveResult = 'ok' | 'forbidden' | 'error' | 'partial';
 
 export async function updateCreatorPackage(
   packageId: string,
-  title: string,
-  areaId: string,
-  price: number,
-  shortDescription: string,
-  description: string,
-  categoryId: string,
-  imageUrl: string,
-  durationMinutes: number | null,
+  input: CreatorPackageInput,
 ): Promise<SaveResult> {
   const supabase = createClient();
 
@@ -1221,11 +1465,13 @@ export async function updateCreatorPackage(
   // .select() で影響行を受け取り、0件なら失敗として扱う。
   // これをしないと他人のパッケージを編集して「保存済み ✓」が出てしまう。
   const { data, error } = await supabase.from('packages').update({
-    area_id: areaId,
-    price,
-    category_id: categoryId || null,
-    image_url: imageUrl || null,
-    duration_minutes: durationMinutes,
+    area_id: input.areaId,
+    price: input.price,
+    category_id: input.categoryId || null,
+    image_url: input.imageUrl || null,
+    duration_minutes: input.durationMinutes,
+    ...placeColumns('start', input.startPlace),
+    ...placeColumns('end', input.endPlace),
   }).eq('id', packageId).select('id');
 
   // 0件 = 自分のものではない。error = 通信・サーバー側の失敗。
@@ -1243,9 +1489,9 @@ export async function updateCreatorPackage(
   const { error: tError } = await supabase.from('package_translations').upsert({
     package_id: packageId,
     language: 'ja',
-    title,
-    short_description: shortDescription,
-    description,
+    title: input.title,
+    short_description: input.shortDescription,
+    description: input.description,
   }, { onConflict: 'package_id,language' });
 
   if (tError) {
@@ -1363,6 +1609,7 @@ export async function getCreatorPackageWithSpots(
     tutorial_video_url: row.tutorial_video_url ?? undefined,
     created_at: row.created_at,
     status: row.status,
+    ...packagePlaces(row),
   } satisfies Package & { status: string };
 
   const spots: Spot[] = (spotsResult.data ?? []).map((s) => {

@@ -643,6 +643,10 @@ export type Database = {
           created_at: string
           currency: string
           duration_minutes: number | null
+          end_latitude: number | null
+          end_longitude: number | null
+          end_place_id: string | null
+          end_place_name: string | null
           features: string[]
           guide_id: string
           id: string
@@ -651,6 +655,10 @@ export type Database = {
           rating: number
           review_count: number
           spot_count: number
+          start_latitude: number | null
+          start_longitude: number | null
+          start_place_id: string | null
+          start_place_name: string | null
           status: string
           tags: string[]
           tutorial_video_url: string | null
@@ -662,6 +670,10 @@ export type Database = {
           created_at?: string
           currency?: string
           duration_minutes?: number | null
+          end_latitude?: number | null
+          end_longitude?: number | null
+          end_place_id?: string | null
+          end_place_name?: string | null
           features?: string[]
           guide_id: string
           id?: string
@@ -670,6 +682,10 @@ export type Database = {
           rating?: number
           review_count?: number
           spot_count?: number
+          start_latitude?: number | null
+          start_longitude?: number | null
+          start_place_id?: string | null
+          start_place_name?: string | null
           status?: string
           tags?: string[]
           tutorial_video_url?: string | null
@@ -681,6 +697,10 @@ export type Database = {
           created_at?: string
           currency?: string
           duration_minutes?: number | null
+          end_latitude?: number | null
+          end_longitude?: number | null
+          end_place_id?: string | null
+          end_place_name?: string | null
           features?: string[]
           guide_id?: string
           id?: string
@@ -689,6 +709,10 @@ export type Database = {
           rating?: number
           review_count?: number
           spot_count?: number
+          start_latitude?: number | null
+          start_longitude?: number | null
+          start_place_id?: string | null
+          start_place_name?: string | null
           status?: string
           tags?: string[]
           tutorial_video_url?: string | null
@@ -725,6 +749,7 @@ export type Database = {
           id: string
           item_type: string
           manner_tip_id: string | null
+          package_id: string | null
           order: number
           plan_id: string
           scheduled_time: string | null
@@ -737,6 +762,7 @@ export type Database = {
           id?: string
           item_type: string
           manner_tip_id?: string | null
+          package_id?: string | null
           order: number
           plan_id: string
           scheduled_time?: string | null
@@ -749,6 +775,7 @@ export type Database = {
           id?: string
           item_type?: string
           manner_tip_id?: string | null
+          package_id?: string | null
           order?: number
           plan_id?: string
           scheduled_time?: string | null

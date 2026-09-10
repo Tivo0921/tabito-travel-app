@@ -182,7 +182,7 @@ npx tsc --noEmit  # CI と同じ型チェック
 
 ## ライセンス
 
-**All Rights Reserved.** © 2026 Shun Ikeda and Jeongwon Yun
+**All Rights Reserved.** © 2026 Shun Ikeda and Yoon Jungwon
 
 本アプリは 池田駿 と ユンジョンウォン の2名による共同開発で、
 著作権は両名が共同で保有しています。
