@@ -23,6 +23,40 @@ const MAX_RESULTS = 5;
 const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
 
 /**
+ * 1ユーザーあたりの呼び出し制限。
+ *
+ * クリエイター登録はセルフサービスなので、ゲートの高さは
+ * 「アカウントを作って登録ボタンを押す」まで。1アカウントあれば
+ * ループで叩けて、こちらの課金で Places が回る。
+ *
+ * ただしこれは減速帯であって上限ではない。プロセスのメモリに持つので、
+ * インスタンスが複数あれば台数分だけ通るし、再起動で消える。
+ * **本当の歯止めは Google Cloud 側のクォータ上限と予算アラート。**
+ * ここはコード側の一次防御として置く。
+ */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+
+const recentCalls = new Map<string, number[]>();
+
+function rateLimited(userId: string): boolean {
+  const now = Date.now();
+  const hits = (recentCalls.get(userId) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  hits.push(now);
+  recentCalls.set(userId, hits);
+
+  // 使われなくなったユーザーの記録を捨てる。放置するとインスタンスが
+  // 生きている限り増え続ける
+  if (recentCalls.size > 1000) {
+    for (const [key, times] of recentCalls) {
+      if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) recentCalls.delete(key);
+    }
+  }
+
+  return hits.length > RATE_LIMIT_MAX;
+}
+
+/**
  * 課金は要求したフィールドで変わる。表示と経路計算に要るものだけに絞る。
  * id / displayName / formattedAddress / location 以外を足さないこと。
  */
@@ -61,6 +95,10 @@ export async function POST(req: NextRequest) {
   }
   if (!guide) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  if (rateLimited(user.id)) {
+    return NextResponse.json({ error: 'rate_limited' }, { status: 429 });
   }
 
   let query: unknown;

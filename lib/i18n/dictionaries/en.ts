@@ -472,6 +472,7 @@ export const en: Record<TranslationKey, string> = {
   'pkgEdit.placeSearching': 'Searching...',
   'pkgEdit.placeNoResults': 'No matching place found',
   'pkgEdit.placeError': 'Search failed. Please try again in a moment.',
+  'pkgEdit.placeRateLimited': 'Too many searches. Please wait a moment and try again.',
   'pkgEdit.placeUnavailable': 'Place search is unavailable in this environment. You can still save without setting a point.',
   'pkgEdit.placeClear': 'Clear selection',
   'pkgEdit.thumbnail': 'Thumbnail image URL',

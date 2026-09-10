@@ -9,7 +9,7 @@ import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 /** サーバー側と同じ下限。ここで止めれば無駄な往復もしない */
 const MIN_QUERY_LENGTH = 2;
 
-type Status = 'idle' | 'searching' | 'no-results' | 'error' | 'unavailable';
+type Status = 'idle' | 'searching' | 'no-results' | 'error' | 'unavailable' | 'rate-limited';
 
 /**
  * Google Places から地点を1つ選ぶ入力。
@@ -52,6 +52,11 @@ export function PlacePicker({
         setStatus('unavailable');
         return;
       }
+      if (res.status === 429) {
+        // 短時間に叩きすぎ。待てば通るので「失敗」とは書き分ける
+        setStatus('rate-limited');
+        return;
+      }
       if (!res.ok) {
         setStatus('error');
         return;
@@ -82,8 +87,13 @@ export function PlacePicker({
     status === 'searching' ? 'pkgEdit.placeSearching'
     : status === 'no-results' ? 'pkgEdit.placeNoResults'
     : status === 'unavailable' ? 'pkgEdit.placeUnavailable'
+    : status === 'rate-limited' ? 'pkgEdit.placeRateLimited'
     : status === 'error' ? 'pkgEdit.placeError'
     : null;
+
+  // 進行中・0件は案内。それ以外は手当てが要る状態なので赤字 + alert。
+  // 状態を足すたびに条件式を伸ばさずに済むよう一度だけ判定する
+  const isProblem = status === 'error' || status === 'unavailable' || status === 'rate-limited';
 
   return (
     <div>
@@ -127,8 +137,8 @@ export function PlacePicker({
 
           {messageKey && (
             <p
-              role={status === 'error' || status === 'unavailable' ? 'alert' : undefined}
-              className={`text-xs mt-1.5 ${status === 'error' || status === 'unavailable' ? 'text-red-600' : 'text-[var(--muted)]'}`}
+              role={isProblem ? 'alert' : undefined}
+              className={`text-xs mt-1.5 ${isProblem ? 'text-red-600' : 'text-[var(--muted)]'}`}
             >
               {t(messageKey)}
             </p>

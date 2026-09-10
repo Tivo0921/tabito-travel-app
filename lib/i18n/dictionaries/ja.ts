@@ -476,6 +476,7 @@ export const ja = {
   'pkgEdit.placeSearching': '検索中...',
   'pkgEdit.placeNoResults': '該当する場所が見つかりませんでした',
   'pkgEdit.placeError': '検索できませんでした。時間をおいてもう一度お試しください',
+  'pkgEdit.placeRateLimited': '検索の回数が多すぎます。少し待ってからお試しください',
   'pkgEdit.placeUnavailable': 'この環境では地点検索を利用できません。地点は未設定のまま保存できます',
   'pkgEdit.placeClear': '選択を解除',
   'pkgEdit.thumbnail': 'サムネイル画像URL',
