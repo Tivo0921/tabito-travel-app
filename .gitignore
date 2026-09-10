@@ -8,7 +8,11 @@ __v0_jsx-dev-runtime.ts
 next.user-config.*
 
 # Environment variables
-.env*.local
+# .env* で全部落とし、コミットしてよいテンプレートだけ戻す。
+# 以前は .env*.local だけだったため、.env / .env.production などに
+# 実キーを書くとコミットされる状態だった。
+.env*
+!.env.local.example
 
 # Common ignores
 node_modules
