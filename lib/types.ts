@@ -70,6 +70,31 @@ export interface Package {
   features: string[];
   tutorial_video_url?: string;
   created_at: string;
+  /** 開始地点。4点セットで入るか、丸ごと null（DB の CHECK で保証）#16 */
+  start_place: PackagePlace | null;
+  /** 終了地点。同上 */
+  end_place: PackagePlace | null;
+}
+
+/**
+ * パッケージの開始/終了地点。
+ * place_id は Places API で引き直すための手がかりだが永続保証がないので、
+ * 表示と経路計算ができるよう name と座標も併せて焼き付けている。
+ */
+export interface PackagePlace {
+  place_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** Places 検索の候補1件（app/api/places/search が返す形） */
+export interface PlaceCandidate {
+  place_id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
 }
 
 export interface Spot {

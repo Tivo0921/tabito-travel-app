@@ -2,6 +2,7 @@ import { createClient } from './client';
 import type {
   Guide,
   Package,
+  PackagePlace,
   Spot,
   JapanesePhrase,
   Review,
@@ -131,6 +132,7 @@ export async function getPackages(lang = DEFAULT_LANG): Promise<Package[]> {
       features: row.features,
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
+      ...packagePlaces(row),
     } satisfies Package;
   });
 }
@@ -200,12 +202,59 @@ export async function getPackageById(id: string, lang = DEFAULT_LANG): Promise<P
     features: data.features,
     tutorial_video_url: data.tutorial_video_url ?? undefined,
     created_at: data.created_at,
+    ...packagePlaces(data),
   } satisfies Package;
 }
 
 // ────────────────────────────────────────────────
 // Spots
 // ────────────────────────────────────────────────
+
+/**
+ * numeric 列を number|null に寄せる。
+ * PostgREST は numeric を文字列で返すことがあり、そのまま渡すと
+ * 距離計算が文字列連結になる。空文字・NaN も null に倒す。
+ */
+function coord(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * パッケージの開始/終了地点を組み立てる。
+ * DB の CHECK で4点セットは揃っている前提だが、片方でも欠けたら
+ * null にして「未設定」に倒す。半端な地点を経路計算に渡さない。
+ */
+function packagePlace(
+  placeId: string | null,
+  name: string | null,
+  lat: unknown,
+  lng: unknown,
+): PackagePlace | null {
+  if (!placeId || !name) return null;
+  const latitude = coord(lat);
+  const longitude = coord(lng);
+  if (latitude === null || longitude === null) return null;
+  return { place_id: placeId, name, latitude, longitude };
+}
+
+/** Package のマッパー全部で同じ2項目を作るのでまとめる */
+function packagePlaces(row: {
+  start_place_id: string | null;
+  start_place_name: string | null;
+  start_latitude: number | null;
+  start_longitude: number | null;
+  end_place_id: string | null;
+  end_place_name: string | null;
+  end_latitude: number | null;
+  end_longitude: number | null;
+}): Pick<Package, 'start_place' | 'end_place'> {
+  return {
+    start_place: packagePlace(row.start_place_id, row.start_place_name, row.start_latitude, row.start_longitude),
+    end_place: packagePlace(row.end_place_id, row.end_place_name, row.end_latitude, row.end_longitude),
+  };
+}
 
 export async function getSpotsByPackageId(packageId: string, lang = DEFAULT_LANG): Promise<Spot[]> {
   const supabase = createClient();
@@ -1026,6 +1075,7 @@ export async function getSavedPackages(lang = DEFAULT_LANG): Promise<Package[]> 
       features: row.features,
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
+      ...packagePlaces(row),
     } satisfies Package;
   });
 }
@@ -1286,6 +1336,7 @@ export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
       tutorial_video_url: row.tutorial_video_url ?? undefined,
       created_at: row.created_at,
       status: row.status,
+      ...packagePlaces(row),
     } satisfies Package & { status: string };
   });
 
@@ -1301,16 +1352,45 @@ export type CreatePackageResult =
   | { id: string; result: 'ok' }
   | { id: null; result: 'forbidden' | 'error' };
 
+/**
+ * パッケージの基本情報の入力。
+ *
+ * 位置引数を並べていたが、開始/終了地点で項目が増えて17個になり
+ * 実用に耐えなくなったのでオブジェクトにまとめた。呼び出し元は
+ * クリエイターの編集画面1箇所だけ。
+ *
+ * 地点は未設定（null）を許す。既存パッケージは全て未設定から始まり、
+ * 設定しなくても保存できる必要がある。
+ */
+export interface CreatorPackageInput {
+  title: string;
+  areaId: string;
+  price: number;
+  shortDescription: string;
+  description: string;
+  categoryId: string;
+  imageUrl: string;
+  durationMinutes: number | null;
+  startPlace: PackagePlace | null;
+  endPlace: PackagePlace | null;
+}
+
+/**
+ * 地点を DB の列に展開する。
+ * 4点セットで入るか、4つとも null。DB の CHECK と同じ約束を守る。
+ */
+function placeColumns(prefix: 'start' | 'end', place: PackagePlace | null) {
+  return {
+    [`${prefix}_place_id`]: place?.place_id ?? null,
+    [`${prefix}_place_name`]: place?.name ?? null,
+    [`${prefix}_latitude`]: place?.latitude ?? null,
+    [`${prefix}_longitude`]: place?.longitude ?? null,
+  };
+}
+
 export async function createCreatorPackage(
   guideId: string,
-  title: string,
-  areaId: string,
-  price: number,
-  shortDescription: string,
-  description: string,
-  categoryId: string,
-  imageUrl: string,
-  durationMinutes: number | null,
+  input: CreatorPackageInput,
 ): Promise<CreatePackageResult> {
   const supabase = createClient();
 
@@ -1318,15 +1398,17 @@ export async function createCreatorPackage(
     .from('packages')
     .insert({
       guide_id: guideId,
-      area_id: areaId,
-      price,
+      area_id: input.areaId,
+      price: input.price,
       currency: 'JPY',
-      category_id: categoryId || null,
-      image_url: imageUrl || null,
-      duration_minutes: durationMinutes,
+      category_id: input.categoryId || null,
+      image_url: input.imageUrl || null,
+      duration_minutes: input.durationMinutes,
       status: 'draft',
       tags: [],
       features: [],
+      ...placeColumns('start', input.startPlace),
+      ...placeColumns('end', input.endPlace),
     })
     .select()
     .single();
@@ -1341,9 +1423,9 @@ export async function createCreatorPackage(
   const { error: transError } = await supabase.from('package_translations').insert({
     package_id: pkg.id,
     language: 'ja',
-    title,
-    short_description: shortDescription,
-    description,
+    title: input.title,
+    short_description: input.shortDescription,
+    description: input.description,
   });
 
   if (transError) {
@@ -1375,14 +1457,7 @@ export type SaveResult = 'ok' | 'forbidden' | 'error' | 'partial';
 
 export async function updateCreatorPackage(
   packageId: string,
-  title: string,
-  areaId: string,
-  price: number,
-  shortDescription: string,
-  description: string,
-  categoryId: string,
-  imageUrl: string,
-  durationMinutes: number | null,
+  input: CreatorPackageInput,
 ): Promise<SaveResult> {
   const supabase = createClient();
 
@@ -1390,11 +1465,13 @@ export async function updateCreatorPackage(
   // .select() で影響行を受け取り、0件なら失敗として扱う。
   // これをしないと他人のパッケージを編集して「保存済み ✓」が出てしまう。
   const { data, error } = await supabase.from('packages').update({
-    area_id: areaId,
-    price,
-    category_id: categoryId || null,
-    image_url: imageUrl || null,
-    duration_minutes: durationMinutes,
+    area_id: input.areaId,
+    price: input.price,
+    category_id: input.categoryId || null,
+    image_url: input.imageUrl || null,
+    duration_minutes: input.durationMinutes,
+    ...placeColumns('start', input.startPlace),
+    ...placeColumns('end', input.endPlace),
   }).eq('id', packageId).select('id');
 
   // 0件 = 自分のものではない。error = 通信・サーバー側の失敗。
@@ -1412,9 +1489,9 @@ export async function updateCreatorPackage(
   const { error: tError } = await supabase.from('package_translations').upsert({
     package_id: packageId,
     language: 'ja',
-    title,
-    short_description: shortDescription,
-    description,
+    title: input.title,
+    short_description: input.shortDescription,
+    description: input.description,
   }, { onConflict: 'package_id,language' });
 
   if (tError) {
@@ -1532,6 +1609,7 @@ export async function getCreatorPackageWithSpots(
     tutorial_video_url: row.tutorial_video_url ?? undefined,
     created_at: row.created_at,
     status: row.status,
+    ...packagePlaces(row),
   } satisfies Package & { status: string };
 
   const spots: Spot[] = (spotsResult.data ?? []).map((s) => {
