@@ -77,6 +77,8 @@ export const packages: Package[] = [
     features: ['ショートガイド動画', '現地tips', 'マップリンク', '日本語会話', 'マナーガイド'],
     tutorial_video_url: 'https://example.com/tutorial-tokyo',
     created_at: '2024-01-01',
+    start_place: null,
+    end_place: null,
   },
   {
     id: 'pkg-2',
@@ -97,6 +99,8 @@ export const packages: Package[] = [
     tags: ['グルメ', 'ローカルフード', '道頓堀'],
     features: ['ショートガイド動画', '現地tips', 'マップリンク', '日本語会話'],
     created_at: '2024-01-05',
+    start_place: null,
+    end_place: null,
   },
   {
     id: 'pkg-3',
@@ -118,6 +122,8 @@ export const packages: Package[] = [
     features: ['ショートガイド動画', '現地tips', 'マップリンク', '日本語会話', 'マナーガイド'],
     tutorial_video_url: 'https://example.com/tutorial-kyoto',
     created_at: '2024-01-10',
+    start_place: null,
+    end_place: null,
   },
   {
     id: 'pkg-4',
@@ -138,6 +144,8 @@ export const packages: Package[] = [
     tags: ['トレンド', 'ファッション', 'カフェ'],
     features: ['ショートガイド動画', '現地tips', 'マップリンク'],
     created_at: '2024-01-15',
+    start_place: null,
+    end_place: null,
   },
 ];
 
