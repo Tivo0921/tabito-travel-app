@@ -249,6 +249,8 @@ export const ko: Record<TranslationKey, string> = {
   'login.subtitle': '로그인하고 여행을 시작하세요',
   'login.google': 'Google로 로그인',
   'login.processing': '처리 중...',
+  'login.startFailed': '로그인을 시작하지 못했습니다. 연결 상태를 확인하거나 시크릿 모드를 끄고 다시 시도해 주세요',
+  'login.takingLonger': '시간이 걸리고 있습니다. 그대로 기다려 주세요(다시 누르면 실패할 수 있습니다)',
   'login.or': '또는',
   'login.guest': '로그인 없이 둘러보기',
   'login.profileFailed': '계정 정보 생성에 실패했습니다. 다시 로그인해 주세요. 계속되면 지원팀에 문의해 주세요',

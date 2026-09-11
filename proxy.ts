@@ -1,10 +1,27 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/**
+ * メンテナンス中でも通すパス。
+ *
+ * /auth/callback を止めると、Google から戻ってきた認可コードが交換されないまま
+ * ルートハンドラが動かず、認証フローが中途半端に終わる。ユーザーから見ると
+ * 「ログインしたのにログインできていない」状態になる。
+ *
+ * コールバックは「既に外部で認証を終えた人を連れ戻すだけ」の経路なので、
+ * メンテ中に通してもサービスを開いたことにはならない。
+ * 連れ戻した先（/home 等）は通常どおりメンテに飛ぶ。
+ */
+const MAINTENANCE_EXEMPT_PATHS = ['/maintenance', '/auth/callback'];
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (process.env.MAINTENANCE_MODE === 'true' && process.env.VERCEL_ENV === 'production' && pathname !== '/maintenance') {
+  if (
+    process.env.MAINTENANCE_MODE === 'true' &&
+    process.env.VERCEL_ENV === 'production' &&
+    !MAINTENANCE_EXEMPT_PATHS.includes(pathname)
+  ) {
     return NextResponse.redirect(new URL('/maintenance', request.url));
   }
 
