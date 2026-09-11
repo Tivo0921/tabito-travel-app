@@ -138,6 +138,13 @@ export default function CreatorPage() {
       setEditing(false);
       setProfileError(null);
     } else {
+      if (result === 'partial') {
+        // guides 側（拠点）はコミット済みで、翻訳だけ失敗した状態。
+        // 表示を古いままにすると「保存されたのに保存されていないように見える」。
+        // どの項目がコミット済みかを UI が推測すると updateMyGuideProfile の
+        // 内部事情に依存するので、DB から引き直して実態に合わせる。
+        await load();
+      }
       setProfileError(result);
     }
     setSavingProfile(false);

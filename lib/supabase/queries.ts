@@ -1214,6 +1214,12 @@ export async function registerAsGuide(
   const existing = await getMyGuideProfile();
   if (existing) return existing;
 
+  // 入口で正規化する。ここで潰しておかないと、DB には trim 済みが入るのに
+  // 戻り値は生の値、という画面とDBのずれが起きる
+  name = name.trim();
+  location = location.trim();
+  bio = bio.trim();
+
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
 
   const { data: guide, error: guideError } = await supabase
@@ -1309,9 +1315,15 @@ export async function updateMyGuideProfile(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 'forbidden';
 
+  // 前後の空白は保存しない。バリデーションは trim して見ているのに
+  // 保存だけ生の値だと、見た目は通るのに空白付きで入る
+  const name = input.name.trim();
+  const bio = input.bio.trim();
+  const location = input.location.trim();
+
   const { data, error } = await supabase
     .from('guides')
-    .update({ location: input.location })
+    .update({ location })
     .eq('user_id', user.id)
     .select('id');
 
@@ -1333,7 +1345,7 @@ export async function updateMyGuideProfile(
   const { error: tError } = await supabase
     .from('guide_translations')
     .upsert(
-      { guide_id: guideId, language: DEFAULT_LANG, name: input.name, bio: input.bio },
+      { guide_id: guideId, language: DEFAULT_LANG, name, bio },
       { onConflict: 'guide_id,language' },
     );
 
