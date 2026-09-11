@@ -25,6 +25,25 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/maintenance', request.url));
   }
 
+  // Next.js のプリフェッチは、ユーザーの操作ではない投機的リクエスト。
+  // ここで Cookie に触れるとレスポンスが no-store になり、プリフェッチ結果が
+  // ルーターキャッシュに載らない。その結果、同じルートを何度も取り直す
+  // （実測: ホーム1回の表示で /explore を6回、全44リクエスト）。
+  //
+  // さらに1回ごとに下の supabase.auth.getUser() が走るため、Supabase 側が
+  // 詰まって 504 / 522 を返し、それが CORS エラーとして表面化していた。
+  //
+  // 実際の画面遷移はこのヘッダを持たないので、セッション更新はそちらで
+  // 従来どおり行われる。プリフェッチはHTMLを先読みするだけで、認証を要する
+  // データはどの画面もクライアント側で取得しているため、挙動は変わらない。
+  const isPrefetch =
+    request.headers.get('next-router-prefetch') === '1' ||
+    request.headers.get('purpose') === 'prefetch';
+
+  if (isPrefetch) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
