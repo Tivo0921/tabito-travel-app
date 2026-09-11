@@ -1282,6 +1282,71 @@ export type MyCreatorPackagesResult = {
   reason: 'ok' | 'unauthenticated' | 'error';
 };
 
+/**
+ * クリエイタープロフィールの編集内容。
+ * 今回は名前・自己紹介・拠点のみ。アバターと対応言語は登録時のまま。#34
+ */
+export interface GuideProfileInput {
+  name: string;
+  bio: string;
+  location: string;
+}
+
+/**
+ * 自分のクリエイタープロフィールを更新する。
+ *
+ * guides への update 経路がこれまで無く、登録時に打ち間違えると直せなかった。
+ * 削除はパッケージを持っていると外部キーで止まるため、実質修正不能だった。#34
+ *
+ * RLS(guides_update_self / guide_translations_update_own)は既にあるので
+ * マイグレーションは要らない。ただし RLS に弾かれた UPDATE は error ではなく
+ * 0件で返るので、.select() で影響行を見ないと「保存できた」ことになってしまう。
+ */
+export async function updateMyGuideProfile(
+  input: GuideProfileInput,
+): Promise<SaveResult> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'forbidden';
+
+  const { data, error } = await supabase
+    .from('guides')
+    .update({ location: input.location })
+    .eq('user_id', user.id)
+    .select('id');
+
+  // 0件 = 自分のガイドではない/存在しない。error = 通信・サーバー側。
+  // 同じ文言にすると、一時的な通信エラーで所有権を疑わせることになる。
+  if (error) {
+    console.error('updateMyGuideProfile failed:', error.message);
+    return 'error';
+  }
+  if (!data || data.length === 0) {
+    console.error('updateMyGuideProfile failed: 0 rows affected');
+    return 'forbidden';
+  }
+
+  const guideId = data[0].id;
+
+  // 登録時に翻訳 insert が落ちていると行が無いことがあるので upsert。
+  // その場合も編集画面から復旧できる。
+  const { error: tError } = await supabase
+    .from('guide_translations')
+    .upsert(
+      { guide_id: guideId, language: DEFAULT_LANG, name: input.name, bio: input.bio },
+      { onConflict: 'guide_id,language' },
+    );
+
+  if (tError) {
+    // guides 側はコミット済み。拠点だけ変わって名前が古いまま残る。
+    // PostgREST では複文トランザクションを張れないため、根治は RPC 化(#22)。
+    console.error('updateMyGuideProfile translation failed:', tError.message);
+    return 'partial';
+  }
+
+  return 'ok';
+}
+
 export async function getMyCreatorPackages(): Promise<MyCreatorPackagesResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
