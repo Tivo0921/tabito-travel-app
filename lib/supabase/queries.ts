@@ -602,7 +602,7 @@ export async function getCommunityRoutes(lang = DEFAULT_LANG): Promise<Community
       image_url: row.image_url ?? '',
       author: {
         id: profile?.id ?? '',
-        name: profile?.display_name ?? 'Anonymous',
+        name: profile?.display_name ?? 'TABITO',
         email: '',
         avatar_url: profile?.avatar_url ?? undefined,
         language: ((profile?.native_language) ?? 'ja') as 'ko' | 'ja' | 'en',
@@ -676,7 +676,7 @@ export async function getCommunityRouteById(id: string, lang = DEFAULT_LANG): Pr
     image_url: data.image_url ?? '',
     author: {
       id: profile?.id ?? '',
-      name: profile?.display_name ?? 'TABITOユーザー',
+      name: profile?.display_name ?? 'TABITO',
       email: '',
       avatar_url: profile?.avatar_url ?? undefined,
       language: ((profile?.native_language) ?? 'ja') as 'ko' | 'ja' | 'en',
