@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/logo';
@@ -11,6 +11,14 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  // 遷移が始まらないときだけ出す案内。押し直しを防ぐ
+  const [slow, setSlow] = useState(false);
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 遷移前にアンマウントされたらタイマーを片付ける
+  useEffect(() => () => {
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+  }, []);
   // 理由コードで文言を出し分ける。profile_failed は「ログインは通ったが
   // プロフィール作成に失敗した」状態で、汎用の失敗メッセージだと誤解を招く。
   const errorCode = searchParams.get('error');
@@ -27,15 +35,36 @@ function LoginInner() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      setError(error.message);
+    setSlow(false);
+
+    // リダイレクトが始まらないまま黙って待たせない。押し直しや再読み込みが
+    // 二重フローを生み、まさに上の残骸を作る原因になる。
+    const slowTimer = setTimeout(() => setSlow(true), 4000);
+    slowTimerRef.current = slowTimer;
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      // 成功時はブラウザが遷移するのでここから先は基本的に実行されない
+      if (error) {
+        clearTimeout(slowTimer);
+        setError(error.message);
+        setLoading(false);
+        setSlow(false);
+      }
+    } catch (e) {
+      // 例外だと戻り値のエラーを見る経路に入らず、loading が立ったままになる。
+      // 原因はストレージ不可（プライベートブラウズ等）だけでなく通信断もあり得るので、
+      // 断定せず両方の可能性を伝える。
+      console.error('signInWithOAuth threw:', e);
+      clearTimeout(slowTimer);
+      setError(t('login.startFailed'));
       setLoading(false);
+      setSlow(false);
     }
   };
 
@@ -81,6 +110,14 @@ function LoginInner() {
             </svg>
             {loading ? t('login.processing') : t('login.google')}
           </button>
+
+          {/* 遷移が始まらないときだけ出す。押し直しは二重フローを生み、
+              消費されない code-verifier を残す原因になる */}
+          {slow && (
+            <p className="text-xs text-[var(--text-sub)] text-center">
+              {t('login.takingLonger')}
+            </p>
+          )}
         </div>
 
         {/* Divider */}
