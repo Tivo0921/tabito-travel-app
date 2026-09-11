@@ -349,7 +349,7 @@ export const ja = {
   // プロフィール編集
   'profileEdit.title': 'プロフィールを編集',
   'profileEdit.avatar': 'プロフィール画像',
-  'profileEdit.avatarHint': 'タップして変更',
+  'profileEdit.avatarFromGoogle': 'Googleアカウントの画像を表示しています',
   'profileEdit.displayName': '表示名',
   'profileEdit.namePlaceholder': '名前を入力',
   'profileEdit.bio': '自己紹介',
@@ -380,6 +380,8 @@ export const ja = {
   'creator.register.areaPlaceholder': '例：東京',
   'creator.register.bio': '自己紹介',
   'creator.register.bioPlaceholder': '例：東京在住7年の韓国人。グルメと下町散歩が得意です。',
+  'creator.register.languages': '案内できる言語',
+  'creator.register.languagesHint': '旅行者に案内できる言語を選んでください（1つ以上）',
   'creator.register.submit': 'ガイド登録する',
   'creator.reviewCount': '{count}件',
   'creator.stat.packages': 'パッケージ',

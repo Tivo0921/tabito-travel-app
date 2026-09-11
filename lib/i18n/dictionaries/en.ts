@@ -345,7 +345,7 @@ export const en: Record<TranslationKey, string> = {
   // Edit profile
   'profileEdit.title': 'Edit profile',
   'profileEdit.avatar': 'Profile picture',
-  'profileEdit.avatarHint': 'Tap to change',
+  'profileEdit.avatarFromGoogle': 'Showing the picture from your Google account',
   'profileEdit.displayName': 'Display name',
   'profileEdit.namePlaceholder': 'Enter your name',
   'profileEdit.bio': 'Bio',
@@ -376,6 +376,8 @@ export const en: Record<TranslationKey, string> = {
   'creator.register.areaPlaceholder': 'e.g. Tokyo',
   'creator.register.bio': 'Bio',
   'creator.register.bioPlaceholder': 'e.g. Korean, 7 years in Tokyo. I know the food scene and old-town walks.',
+  'creator.register.languages': 'Languages you can guide in',
+  'creator.register.languagesHint': 'Pick at least one language you can guide travelers in.',
   'creator.register.submit': 'Register as a guide',
   'creator.reviewCount': '{count} reviews',
   'creator.stat.packages': 'Packages',

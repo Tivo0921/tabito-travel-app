@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ChevronLeft, Camera, Loader2 } from 'lucide-react';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { CTAButton } from '@/components/cta-button';
 import type { User } from '@supabase/supabase-js';
@@ -12,7 +12,6 @@ import { useT } from '@/lib/i18n/provider';
 export default function ProfileEditPage() {
   const t = useT();
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [user, setUser] = useState<User | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -69,15 +68,12 @@ export default function ProfileEditPage() {
                 </div>
               )}
             </div>
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="absolute bottom-0 right-0 w-8 h-8 bg-[var(--primary)] rounded-full flex items-center justify-center shadow-md"
-            >
-              <Camera className="w-4 h-4 text-white" />
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" />
           </div>
-          <p className="text-xs text-[var(--muted)] mt-2">{t('profileEdit.avatarHint')}</p>
+          {/* 画像の差し替えは未実装。カメラボタンとファイル入力は置いてあったが
+              input に onChange が無く、選んでも何も起きなかった。
+              押せるのに動かないUIは無いより悪いので、実装が入るまで出さない。
+              アップロード基盤（Storage・リサイズ・旧画像削除）は #42 で扱う。 */}
+          <p className="text-xs text-[var(--muted)] mt-2">{t('profileEdit.avatarFromGoogle')}</p>
         </div>
 
         {/* Form */}
