@@ -25,6 +25,34 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/maintenance', request.url));
   }
 
+  // Next.js のプリフェッチは、ユーザーの操作ではない投機的リクエスト。
+  // 素通しする目的は、下の supabase.auth.getUser() を走らせないこと。
+  //
+  // ホーム1回の表示でプリフェッチが12件以上飛ぶ（実測: 全44リクエスト、
+  // うち /explore が6回）。ログイン済みだと1件ごとに getUser() が実際に
+  // ネットワークへ出るため、Supabase の auth が詰まって 504 / 522 を返す。
+  // 5xx にはCORSヘッダが付かないので、ブラウザには
+  // 「No 'Access-Control-Allow-Origin' header」として見えていた。
+  //
+  // 重複フェッチそのものはこれでは減らない。全ルートが no-store なのは
+  // app/layout.tsx の resolveLocale() が cookies() / headers() を読んで
+  // いるためで（lib/i18n/server.ts）、proxy とは別の要因。言語のCookie方式は
+  // CLAUDE.md で維持すると決めているので、重複を減らすなら別の設計が要る。
+  //
+  // 実際の遷移はこのヘッダを持たないので proxy を通る。ただしプリフェッチ
+  // 済みの結果がルーターキャッシュから再利用された遷移はサーバーに届かず、
+  // サーバー側のセッション更新は走らない。現状は認証がすべてクライアント側
+  // （createBrowserClient がトークンを更新して Cookie を書き、route handler は
+  // 自前で getUser する）なので挙動は変わらないが、**サーバー描画に認証を
+  // 持ち込むときはこの前提に頼らないこと。**
+  const isPrefetch =
+    request.headers.get('next-router-prefetch') === '1' ||
+    request.headers.get('purpose') === 'prefetch';
+
+  if (isPrefetch) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
