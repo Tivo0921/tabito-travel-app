@@ -249,7 +249,7 @@ export const ko: Record<TranslationKey, string> = {
   'login.subtitle': '로그인하고 여행을 시작하세요',
   'login.google': 'Google로 로그인',
   'login.processing': '처리 중...',
-  'login.storageBlocked': '브라우저 설정 때문에 로그인을 시작할 수 없었습니다. 시크릿 모드를 끄거나 쿠키를 허용한 후 다시 시도해 주세요',
+  'login.startFailed': '로그인을 시작하지 못했습니다. 연결 상태를 확인하거나 시크릿 모드를 끄고 다시 시도해 주세요',
   'login.takingLonger': '시간이 걸리고 있습니다. 그대로 기다려 주세요(다시 누르면 실패할 수 있습니다)',
   'login.or': '또는',
   'login.guest': '로그인 없이 둘러보기',

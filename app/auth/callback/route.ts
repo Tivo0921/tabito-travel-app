@@ -41,7 +41,22 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}${next}`);
     }
     // code→セッション交換に失敗: 真因を特定するため実エラーを記録・伝播
-    console.error('exchangeCodeForSession failed:', error.status, error.code, error.message);
+    //
+    // pkce_code_verifier_not_found を本番で観測したが真因を特定できていない。
+    // SDK は signInWithOAuth のたびに verifier を同じキーへ上書きするので、
+    // 「古い残骸が残っていた」ではなく「届いていない」が正しい読み。
+    // 次に起きたときに切り分けられるよう、verifier Cookie が来ていたかと
+    // どの sb- Cookie が届いたかを残す（値は出さない）。
+    const cookieNames = request.headers
+      .get('cookie')
+      ?.split('; ')
+      .map((c) => c.split('=')[0])
+      .filter((n) => n.startsWith('sb-')) ?? [];
+    console.error(
+      'exchangeCodeForSession failed:', error.status, error.code, error.message,
+      '| verifier cookie:', cookieNames.some((n) => n.includes('code-verifier')),
+      '| sb cookies:', cookieNames.join(','),
+    );
     return NextResponse.redirect(
       `${origin}/login?error=auth_failed&code=${encodeURIComponent(error.code ?? 'unknown')}`
     );

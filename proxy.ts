@@ -4,11 +4,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * メンテナンス中でも通すパス。
  *
- * /auth/callback を止めてはいけない。ここを /maintenance に飛ばすと
- * ルートハンドラが動かず、Google の認可コードが交換されないまま
- * code-verifier の Cookie がブラウザに residue として残る。
- * メンテ解除後にログインし直すと、その残骸と新しいフローが噛み合わず
- * pkce_code_verifier_not_found になり、サイトデータを消すまで直らない。
+ * /auth/callback を止めると、Google から戻ってきた認可コードが交換されないまま
+ * ルートハンドラが動かず、認証フローが中途半端に終わる。ユーザーから見ると
+ * 「ログインしたのにログインできていない」状態になる。
  *
  * コールバックは「既に外部で認証を終えた人を連れ戻すだけ」の経路なので、
  * メンテ中に通してもサービスを開いたことにはならない。

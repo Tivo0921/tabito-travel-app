@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/logo';
@@ -13,6 +13,12 @@ function LoginInner() {
   const [loading, setLoading] = useState(false);
   // 遷移が始まらないときだけ出す案内。押し直しを防ぐ
   const [slow, setSlow] = useState(false);
+  const slowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 遷移前にアンマウントされたらタイマーを片付ける
+  useEffect(() => () => {
+    if (slowTimerRef.current) clearTimeout(slowTimerRef.current);
+  }, []);
   // 理由コードで文言を出し分ける。profile_failed は「ログインは通ったが
   // プロフィール作成に失敗した」状態で、汎用の失敗メッセージだと誤解を招く。
   const errorCode = searchParams.get('error');
@@ -26,26 +32,6 @@ function LoginInner() {
 
   const supabase = createClient();
 
-  // 認証に失敗して戻ってきたら、中断したフローの残骸を捨てる。
-  //
-  // 消費されなかった code-verifier の Cookie が残っていると、次のログインで
-  // それが拾われて pkce_code_verifier_not_found になり、ユーザーが自分で
-  // サイトデータを削除するまで復帰できない。審査員や一般ユーザーに
-  // 「Cookie を消してください」とは言えないので、ここで自動的に片付ける。
-  useEffect(() => {
-    if (!errorCode) return;
-    try {
-      for (const cookie of document.cookie.split('; ')) {
-        const name = cookie.split('=')[0];
-        if (name.startsWith('sb-') && name.includes('code-verifier')) {
-          document.cookie = `${name}=; Max-Age=0; path=/`;
-        }
-      }
-    } catch {
-      // Cookie が触れない環境でも、ログイン画面自体は出し続ける
-    }
-  }, [errorCode]);
-
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
@@ -54,6 +40,7 @@ function LoginInner() {
     // リダイレクトが始まらないまま黙って待たせない。押し直しや再読み込みが
     // 二重フローを生み、まさに上の残骸を作る原因になる。
     const slowTimer = setTimeout(() => setSlow(true), 4000);
+    slowTimerRef.current = slowTimer;
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -71,10 +58,11 @@ function LoginInner() {
       }
     } catch (e) {
       // 例外だと戻り値のエラーを見る経路に入らず、loading が立ったままになる。
-      // ストレージが使えない環境（プライベートブラウズ等）で起きうる。
+      // 原因はストレージ不可（プライベートブラウズ等）だけでなく通信断もあり得るので、
+      // 断定せず両方の可能性を伝える。
       console.error('signInWithOAuth threw:', e);
       clearTimeout(slowTimer);
-      setError(t('login.storageBlocked'));
+      setError(t('login.startFailed'));
       setLoading(false);
       setSlow(false);
     }

@@ -249,7 +249,7 @@ export const en: Record<TranslationKey, string> = {
   'login.subtitle': 'Log in to start your trip',
   'login.google': 'Continue with Google',
   'login.processing': 'Processing...',
-  'login.storageBlocked': 'Your browser settings prevented sign-in from starting. Turn off private browsing or allow cookies, then try again.',
+  'login.startFailed': 'Could not start sign-in. Check your connection, or turn off private browsing, then try again.',
   'login.takingLonger': 'This is taking a moment. Please wait — tapping again can cause it to fail.',
   'login.or': 'or',
   'login.guest': 'Look around without logging in',
