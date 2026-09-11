@@ -12,14 +12,18 @@ import {
   Trash2,
   ChevronRight,
   MapPin,
+  Pencil,
   Star,
   ArrowLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
+import { GuideProfileFields, type GuideProfileDraft } from '@/components/guide-profile-fields';
 import {
   getMyGuideProfile,
   registerAsGuide,
+  updateMyGuideProfile,
+  type SaveResult,
   getMyCreatorPackages,
   deleteCreatorPackage,
   setPackageStatus,
@@ -52,10 +56,14 @@ export default function CreatorPage() {
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
-  const [name, setName] = useState('');
-  const [location, setLocation] = useState('');
-  const [bio, setBio] = useState('');
+  const [draft, setDraft] = useState<GuideProfileDraft>({ name: '', location: '', bio: '' });
   const [registering, setRegistering] = useState(false);
+
+  // プロフィール編集 #34
+  const [editing, setEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState<GuideProfileDraft>({ name: '', location: '', bio: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
 
   // 取得失敗のバナーから引き直せるよう、マウント時の取得を関数に出す。
   // マウント時にしか実行できないと、通信が復旧してもバナーが残り続ける。
@@ -96,10 +104,10 @@ export default function CreatorPage() {
   };
 
   const handleRegister = async () => {
-    if (!name.trim() || !location.trim()) return;
+    if (!draft.name.trim() || !draft.location.trim()) return;
     setRegistering(true);
     setRegisterError(false);
-    const g = await registerAsGuide(name, location, bio);
+    const g = await registerAsGuide(draft.name, draft.location, draft.bio);
     if (g) {
       setGuide(g);
     } else {
@@ -108,6 +116,38 @@ export default function CreatorPage() {
       setRegisterError(true);
     }
     setRegistering(false);
+  };
+
+  const openProfileEdit = () => {
+    if (!guide) return;
+    // 現在値を入れてから開く。空欄から始めると、直したい項目以外まで
+    // 打ち直させることになる
+    setEditDraft({ name: guide.name, location: guide.location, bio: guide.bio });
+    setProfileError(null);
+    setEditing(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editDraft.name.trim() || !editDraft.location.trim()) return;
+    setSavingProfile(true);
+    const result = await updateMyGuideProfile(editDraft);
+    if (result === 'ok') {
+      // 画面の表示を保存内容に合わせる。再取得しないのは、
+      // 保存済みの値がそのまま手元にあるため
+      setGuide((prev) => (prev ? { ...prev, ...editDraft } : prev));
+      setEditing(false);
+      setProfileError(null);
+    } else {
+      if (result === 'partial') {
+        // guides 側（拠点）はコミット済みで、翻訳だけ失敗した状態。
+        // 表示を古いままにすると「保存されたのに保存されていないように見える」。
+        // どの項目がコミット済みかを UI が推測すると updateMyGuideProfile の
+        // 内部事情に依存するので、DB から引き直して実態に合わせる。
+        await load();
+      }
+      setProfileError(result);
+    }
+    setSavingProfile(false);
   };
 
   const handleDelete = async (pkgId: string) => {
@@ -203,36 +243,8 @@ export default function CreatorPage() {
               {t('creator.register.desc')}
             </p>
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1">{t('creator.register.name')}</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={t('creator.register.namePlaceholder')}
-                  className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1">{t('creator.register.area')}</label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder={t('creator.register.areaPlaceholder')}
-                  className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-sub)] mb-1">{t('creator.register.bio')}</label>
-                <textarea
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder={t('creator.register.bioPlaceholder')}
-                  rows={3}
-                  className="w-full px-4 py-3 bg-white border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
-                />
-              </div>
+              <GuideProfileFields value={draft} onChange={setDraft} disabled={registering} />
+
               {registerError && (
                 <p className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
                   {t('creator.registerFailed')}
@@ -241,7 +253,7 @@ export default function CreatorPage() {
               <CTAButton
                 onClick={handleRegister}
                 fullWidth
-                disabled={!name.trim() || !location.trim() || registering}
+                disabled={!draft.name.trim() || !draft.location.trim() || registering}
                 loading={registering}
               >
                 {t('creator.register.submit')}
@@ -275,7 +287,57 @@ export default function CreatorPage() {
                 </p>
               )}
             </div>
+            {/* 登録後に名前・拠点・自己紹介を直す導線。これが無いと
+                打ち間違えても修正できなかった #34 */}
+            <button
+              onClick={openProfileEdit}
+              className="self-start flex-shrink-0 p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label={t('creator.profile.edit')}
+            >
+              <Pencil className="w-4 h-4 text-[var(--text-sub)]" />
+            </button>
           </div>
+
+          {/* プロフィール編集 #34 */}
+          {editing && (
+            <div className="p-4 bg-white rounded-2xl shadow-sm space-y-3">
+              <h2 className="font-semibold text-[var(--text-main)]">{t('creator.profile.edit')}</h2>
+
+              <GuideProfileFields
+                value={editDraft}
+                onChange={setEditDraft}
+                disabled={savingProfile}
+              />
+
+              {profileError && (
+                <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t(
+                    profileError === 'forbidden' ? 'creator.profile.forbidden'
+                    : profileError === 'partial' ? 'creator.profile.partial'
+                    : 'creator.profile.error'
+                  )}
+                </p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setEditing(false)}
+                  disabled={savingProfile}
+                  className="flex-1 py-3 border border-[var(--border)] rounded-2xl font-medium text-sm disabled:opacity-50"
+                >
+                  {t('common.cancel')}
+                </button>
+                <CTAButton
+                  onClick={handleSaveProfile}
+                  className="flex-1"
+                  disabled={!editDraft.name.trim() || !editDraft.location.trim() || savingProfile}
+                  loading={savingProfile}
+                >
+                  {t('common.save')}
+                </CTAButton>
+              </div>
+            </div>
+          )}
 
           {/* 統計 */}
           <div className="grid grid-cols-3 gap-3">
