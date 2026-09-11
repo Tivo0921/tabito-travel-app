@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/logo';
@@ -11,6 +11,8 @@ function LoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
+  // 遷移が始まらないときだけ出す案内。押し直しを防ぐ
+  const [slow, setSlow] = useState(false);
   // 理由コードで文言を出し分ける。profile_failed は「ログインは通ったが
   // プロフィール作成に失敗した」状態で、汎用の失敗メッセージだと誤解を招く。
   const errorCode = searchParams.get('error');
@@ -24,18 +26,57 @@ function LoginInner() {
 
   const supabase = createClient();
 
+  // 認証に失敗して戻ってきたら、中断したフローの残骸を捨てる。
+  //
+  // 消費されなかった code-verifier の Cookie が残っていると、次のログインで
+  // それが拾われて pkce_code_verifier_not_found になり、ユーザーが自分で
+  // サイトデータを削除するまで復帰できない。審査員や一般ユーザーに
+  // 「Cookie を消してください」とは言えないので、ここで自動的に片付ける。
+  useEffect(() => {
+    if (!errorCode) return;
+    try {
+      for (const cookie of document.cookie.split('; ')) {
+        const name = cookie.split('=')[0];
+        if (name.startsWith('sb-') && name.includes('code-verifier')) {
+          document.cookie = `${name}=; Max-Age=0; path=/`;
+        }
+      }
+    } catch {
+      // Cookie が触れない環境でも、ログイン画面自体は出し続ける
+    }
+  }, [errorCode]);
+
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      setError(error.message);
+    setSlow(false);
+
+    // リダイレクトが始まらないまま黙って待たせない。押し直しや再読み込みが
+    // 二重フローを生み、まさに上の残骸を作る原因になる。
+    const slowTimer = setTimeout(() => setSlow(true), 4000);
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      // 成功時はブラウザが遷移するのでここから先は基本的に実行されない
+      if (error) {
+        clearTimeout(slowTimer);
+        setError(error.message);
+        setLoading(false);
+        setSlow(false);
+      }
+    } catch (e) {
+      // 例外だと戻り値のエラーを見る経路に入らず、loading が立ったままになる。
+      // ストレージが使えない環境（プライベートブラウズ等）で起きうる。
+      console.error('signInWithOAuth threw:', e);
+      clearTimeout(slowTimer);
+      setError(t('login.storageBlocked'));
       setLoading(false);
+      setSlow(false);
     }
   };
 
@@ -81,6 +122,14 @@ function LoginInner() {
             </svg>
             {loading ? t('login.processing') : t('login.google')}
           </button>
+
+          {/* 遷移が始まらないときだけ出す。押し直しは二重フローを生み、
+              消費されない code-verifier を残す原因になる */}
+          {slow && (
+            <p className="text-xs text-[var(--text-sub)] text-center">
+              {t('login.takingLonger')}
+            </p>
+          )}
         </div>
 
         {/* Divider */}

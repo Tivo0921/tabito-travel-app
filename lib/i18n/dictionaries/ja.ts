@@ -253,6 +253,8 @@ export const ja = {
   'login.subtitle': 'アカウントでログインして旅を始めましょう',
   'login.google': 'Googleでログイン',
   'login.processing': '処理中...',
+  'login.storageBlocked': 'ブラウザの設定でログインを開始できませんでした。プライベートブラウズを解除するか、Cookieを許可してお試しください',
+  'login.takingLonger': '時間がかかっています。そのままお待ちください（押し直すと失敗することがあります）',
   'login.or': 'または',
   'login.guest': 'ログインせずに見てみる',
   'login.profileFailed': 'アカウント情報の作成に失敗しました。もう一度ログインしてください。続く場合はサポートへご連絡ください',
