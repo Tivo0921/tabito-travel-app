@@ -323,6 +323,83 @@ export async function getSpotsByPackageId(packageId: string, lang = DEFAULT_LANG
 // Reviews
 // ────────────────────────────────────────────────
 
+/**
+ * 自分がそのパッケージに書いたレビュー。無ければ null。
+ * reviews は UNIQUE(package_id, user_id) なので1人1件。
+ */
+export async function getMyReview(packageId: string): Promise<Review | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('id, package_id, user_id, rating, comment, created_at')
+    .eq('package_id', packageId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('getMyReview error:', error.message);
+    return null;
+  }
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    package_id: data.package_id,
+    user_id: data.user_id,
+    rating: data.rating,
+    comment: data.comment ?? '',
+    created_at: data.created_at,
+  } as Review;
+}
+
+/**
+ * レビューを投稿・更新する。
+ *
+ * RLS(reviews_insert_purchased)が「status='completed' の購入者のみ」を
+ * 保証しているので、ここで購入判定を重ねない。弾かれたときは
+ * 42501 が返るので、所有権の問題と通信障害を見分けられる。
+ *
+ * UNIQUE(package_id, user_id) があるので upsert。書き直しも同じ経路で通る。
+ *
+ * packages.rating / review_count は DB のトリガーが再計算するので、
+ * ここでは触らない（#33）。
+ */
+export async function submitReview(
+  packageId: string,
+  rating: number,
+  comment: string,
+): Promise<SaveResult> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'forbidden';
+
+  // DB の CHECK と同じ範囲。弾かれてから「保存できません」と出すより、
+  // 送る前に止める
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return 'error';
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .upsert(
+      { package_id: packageId, user_id: user.id, rating, comment: comment.trim() || null },
+      { onConflict: 'package_id,user_id' },
+    )
+    .select('id');
+
+  if (error) {
+    // 42501 = RLS に弾かれた。購入していないパッケージへの投稿
+    console.error('submitReview failed:', error.code, error.message);
+    return error.code === '42501' ? 'forbidden' : 'error';
+  }
+  if (!data || data.length === 0) {
+    console.error('submitReview failed: 0 rows affected');
+    return 'forbidden';
+  }
+  return 'ok';
+}
+
 export async function getReviewsByPackageId(packageId: string): Promise<Review[]> {
   const supabase = createClient();
 
