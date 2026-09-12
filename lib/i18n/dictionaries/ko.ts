@@ -388,6 +388,7 @@ export const ko: Record<TranslationKey, string> = {
   'profileEdit.saved': '저장했습니다!',
   'profileEdit.forbidden': '저장하지 못했습니다. 다시 로그인한 후 시도해 주세요',
   'profileEdit.failed': '저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
+  'profileEdit.loadFailed': '프로필을 불러오지 못했습니다. 이대로 저장하면 내용이 사라질 수 있으니 페이지를 새로고침해 주세요',
   'profileEdit.save': '변경 사항 저장',
 
   // 매너 가이드

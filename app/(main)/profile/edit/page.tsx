@@ -20,8 +20,11 @@ export default function ProfileEditPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
+    // 入力を始めたあとに fetch が返っても上書きしないためのフラグ
+    let cancelled = false;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return; }
@@ -29,15 +32,31 @@ export default function ProfileEditPage() {
       setAvatarUrl(data.user.user_metadata?.avatar_url);
       // 表示側は profiles を読むので、編集画面もここを見る。
       // user_metadata を読むと、保存した値と違うものが出る #31
-      getMyProfile().then((p) => {
-        setDisplayName(p?.display_name ?? data.user.user_metadata?.full_name ?? '');
-        setBio(p?.bio ?? '');
+      getMyProfile().then((result) => {
+        // 遅い回線で、返る前に入力を始めていたら上書きしない。
+        // 入力中の文字が消えるのは、保存が壊れるより体験が悪い
+        if (cancelled) return;
+
+        if (result.status === 'error') {
+          // 「行が無い」と区別する。ここで Google の名前にフォールバックして
+          // 保存すると、ユーザーが付けた名前を上書きしてしまう
+          setLoadError(true);
+          return;
+        }
+        setDisplayName(
+          result.status === 'ok' && result.profile.display_name
+            ? result.profile.display_name
+            : (data.user.user_metadata?.full_name ?? ''),
+        );
+        setBio(result.status === 'ok' ? result.profile.bio : '');
       });
     });
+
+    return () => { cancelled = true; };
   }, [router]);
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || loadError) return;
     setSaving(true);
     setSaveError(null);
 
@@ -126,6 +145,12 @@ export default function ProfileEditPage() {
           </div>
         </div>
 
+        {loadError && (
+          <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t('profileEdit.loadFailed')}
+          </p>
+        )}
+
         {saveError && (
           <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
             {t(saveError === 'forbidden' ? 'profileEdit.forbidden' : 'profileEdit.failed')}
@@ -135,7 +160,7 @@ export default function ProfileEditPage() {
         {/* Save button */}
         <CTAButton
           onClick={handleSave}
-          disabled={saving || saved || !displayName.trim()}
+          disabled={saving || saved || loadError || !displayName.trim()}
           className="w-full"
         >
           {saving ? (

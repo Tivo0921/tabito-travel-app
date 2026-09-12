@@ -805,10 +805,15 @@ function planItemPackage(row: {
  * 自分のプロフィール（表示名・自己紹介）を取る。#31
  * 表示側は profiles を読むので、編集画面もここを見る。
  */
-export async function getMyProfile(): Promise<{ display_name: string; bio: string } | null> {
+export type MyProfileResult =
+  | { status: 'ok'; profile: { display_name: string; bio: string } }
+  | { status: 'none' }
+  | { status: 'error' };
+
+export async function getMyProfile(): Promise<MyProfileResult> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) return { status: 'error' };
 
   const { data, error } = await supabase
     .from('profiles')
@@ -816,12 +821,18 @@ export async function getMyProfile(): Promise<{ display_name: string; bio: strin
     .eq('id', user.id)
     .maybeSingle();
 
+  // 「行が無い」と「取得に失敗した」を同じ null にすると、呼び出し側が
+  // 区別できない。編集画面が失敗時に Google の名前へフォールバックして
+  // 保存すると、ユーザーが付けた名前を上書きしてしまう
   if (error) {
     console.error('getMyProfile error:', error.message);
-    return null;
+    return { status: 'error' };
   }
-  if (!data) return null;
-  return { display_name: data.display_name ?? '', bio: data.bio ?? '' };
+  if (!data) return { status: 'none' };
+  return {
+    status: 'ok',
+    profile: { display_name: data.display_name ?? '', bio: data.bio ?? '' },
+  };
 }
 
 /**

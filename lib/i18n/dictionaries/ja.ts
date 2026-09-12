@@ -392,6 +392,7 @@ export const ja = {
   'profileEdit.saved': '保存しました！',
   'profileEdit.forbidden': '保存できませんでした。ログインし直してからお試しください',
   'profileEdit.failed': '保存できませんでした。通信状況を確認して、もう一度お試しください',
+  'profileEdit.loadFailed': 'プロフィールを読み込めませんでした。このまま保存すると内容が失われる可能性があるため、画面を再読み込みしてください',
   'profileEdit.save': '変更を保存',
 
   // マナーガイド
