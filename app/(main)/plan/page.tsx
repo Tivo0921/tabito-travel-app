@@ -144,6 +144,11 @@ function typeIcon(type: string) {
  * パッケージ由来の行の名前を変えると、パッケージの中身を見たときと
  * 食い違う。順番を固定しているのと同じ理由で、名前も固定する。
  */
+/** 行程の同一性。IDと並びが変われば、前の提案はもう当てはまらない */
+function planSignature(items: PlanItem[]): string {
+  return items.map((i) => i.id).join(',');
+}
+
 function canEditTitle(item: PlanItem): boolean {
   return item.source !== 'package' && item.item_type !== 'package';
 }
@@ -257,6 +262,10 @@ export default function PlanPage() {
   const [applyingReorder, setApplyingReorder] = useState(false);
   // 提案を適用したあとの控えめな確認表示
   const [reorderApplied, setReorderApplied] = useState(false);
+  // 提案を受け取った時点の行程。計画を切り替えたり、行を足したり展開したり
+  // ドラッグしたりすると、提案は現在の行程を指さなくなる。mutation ごとに
+  // setAdvice(null) を書いて回ると必ず書き漏らすので、行程そのものを見る
+  const adviceSnapshot = useRef<string | null>(null);
   const aiInputRef = useRef<HTMLInputElement>(null);
   const [askingAi, setAskingAi] = useState(false);
   const [aiError, setAiError] = useState<'empty' | 'rate' | 'unavailable' | 'failed' | null>(null);
@@ -317,6 +326,15 @@ export default function PlanPage() {
       setActiveDay(1);
     }
   }, [selectedPlanId]);
+
+  // 行程が変わった提案は捨てる。古い提案を今の行程に当てると、
+  // 提案に無い行が画面から消える
+  useEffect(() => {
+    if (!advice) return;
+    if (adviceSnapshot.current === planSignature(planItems)) return;
+    setAdvice(null);
+    setReorderApplied(false);
+  }, [planItems, advice]);
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
   const dayCount = selectedPlan ? getDayCount(selectedPlan) : 1;
@@ -456,7 +474,9 @@ export default function PlanPage() {
 
     const durationRaw = editDraft.duration.trim();
     const duration = durationRaw === '' ? null : Number(durationRaw);
-    if (duration !== null && (!Number.isFinite(duration) || duration < 0)) {
+    // duration_minutes は int。小数を通すと PostgREST が 22P02 を返し、
+    // ユーザーには汎用の「保存できませんでした」しか出ない
+    if (duration !== null && (!Number.isInteger(duration) || duration < 0 || duration > 1440)) {
       setEditFailed(true);
       return;
     }
@@ -627,6 +647,8 @@ export default function PlanPage() {
     setAskingAi(true);
     setAiError(null);
     setAdvice(null);
+    // 受け入れ済みバナーが新しい回答の下に残っていた
+    setReorderApplied(false);
     try {
       const res = await fetch('/api/plan/advise', {
         method: 'POST',
@@ -640,8 +662,10 @@ export default function PlanPage() {
       const data = (await res.json()) as PlanAdvice;
       const hasContent =
         data.concerns?.length || data.suggestions?.length || data.checks?.length || data.schedule;
-      if (hasContent) setAdvice(data);
-      else setAiError('failed');
+      if (hasContent) {
+        adviceSnapshot.current = planSignature(planItems);
+        setAdvice(data);
+      } else setAiError('failed');
     } catch {
       setAiError('failed');
     } finally {
@@ -652,6 +676,20 @@ export default function PlanPage() {
   const handleApplySchedule = async () => {
     if (!advice?.schedule) return;
     const { day, itemIds, times } = advice.schedule;
+    // サーバ側の検証は「リクエストした時点の DB」に対するもの。
+    // 受け取ってから押すまでに行程が変われば、その保証は切れている。
+    // 押す直前の行程と照合し、食い違っていれば当てない
+    const dayIds = planItems.filter((i) => i.day === day).map((i) => i.id);
+    const matchesNow =
+      dayIds.length === itemIds.length && new Set(itemIds).size === itemIds.length &&
+      itemIds.every((id) => dayIds.includes(id));
+    if (!matchesNow) {
+      setAdvice(null);
+      setReorderApplied(false);
+      setReorderError(true);
+      return;
+    }
+
     setApplyingReorder(true);
 
     // 提案どおりに並べ替え、時刻も入れる。サーバ側で「IDの過不足が無い」
@@ -670,16 +708,25 @@ export default function PlanPage() {
       })
       .filter((i): i is PlanItem => Boolean(i));
 
-    setPlanItems((prev) => [...prev.filter((i) => i.day !== day), ...applied]);
+    const next = [...planItems.filter((i) => i.day !== day), ...applied];
+    setPlanItems(next);
     const ok = await applyPlanSchedule(
       applied.map((i) => i.id),
       // DBに渡すのは "HH:MM"。空文字は「時刻なし」として扱われる
       applied.map((i) => i.scheduled_time?.slice(0, 5) ?? ''),
     );
-    if (!ok) setReorderError(true);
-    // 適用済みの提案は消す。残すと何度も押せてしまう
-    setAdvice((prev) => (prev ? { ...prev, schedule: null } : prev));
-    setReorderApplied(true);
+
+    if (ok) {
+      // 自分で当てた変更で提案が陳腐化扱いにならないよう、基準を進める
+      adviceSnapshot.current = planSignature(next);
+      // 適用済みの提案は消す。残すと何度も押せてしまう
+      setAdvice((prev) => (prev ? { ...prev, schedule: null } : prev));
+      setReorderApplied(true);
+    } else {
+      // 失敗しているのに「反映しました」を出すと、DBと食い違ったまま
+      // 再試行の手段も無くなる。提案は残す
+      setReorderError(true);
+    }
     setApplyingReorder(false);
   };
 

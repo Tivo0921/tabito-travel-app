@@ -14,7 +14,7 @@ import { createClient } from '@/lib/supabase/server';
 const MODEL = process.env.OPENAI_MODEL ?? 'gpt-5.6-luna';
 const MAX_QUESTION_LENGTH = 500;
 /** 出力の上限。無いと長い応答がそのまま課金される */
-const MAX_OUTPUT_TOKENS = 1500;
+const MAX_OUTPUT_TOKENS = 2000;
 /** 上流が返さないと Vercel の関数タイムアウトまで掴んだままになる */
 const UPSTREAM_TIMEOUT_MS = 30_000;
 /** 行程側にも上限を置く。質問だけ制限しても、アイテムを大量に作れば入力を膨らませられる */
@@ -63,7 +63,8 @@ schedule について（順番と開始時刻の提案）:
 - times は itemIds と同じ順・同じ個数。"HH:MM"（24時間表記）で入れる
 - 時刻が空欄の行には、移動と所要時間から見て無理のない時刻を入れてよい
 - 時刻は目安。営業時間の実データは無いので、reason で断定しない
-- 時刻は上から順に前後しないようにする。決めきれない行だけ "" にする
+- 時刻は上から順に前後しないようにする
+- "" は「今の時刻のまま」。時刻を消す手段は無いので、消したいときも "" にしない
 - 「順番はそのままで時刻だけ入れる」も有効な提案。並べ替えを無理に作らない
 - reason は1文、40文字以内`;
 
@@ -113,56 +114,105 @@ type Schedule = { day: number; itemIds: string[]; times: string[]; reason: strin
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
+ * 上限を日の境界で切る。
+ *
+ * 単純に N 件で切ると日の途中で切れ、その日の「一部だけ」の提案が
+ * 検証を通ってしまう。反映すると残りの行の order と衝突する。
+ * 1日だけで上限を超えるときは渡すしかないので、その日を
+ * partialDays に入れて提案の対象から外す。
+ */
+function limitItems(all: PlanItemRow[]): { used: PlanItemRow[]; partialDays: Set<number> } {
+  if (all.length <= MAX_ITEMS) return { used: all, partialDays: new Set() };
+
+  const cut = all.slice(0, MAX_ITEMS);
+  const lastDay = cut[cut.length - 1].day;
+
+  // ちょうど日の切れ目で収まったなら、そのまま全部使える
+  const inCut = cut.filter((i) => i.day === lastDay).length;
+  const inAll = all.filter((i) => i.day === lastDay).length;
+  if (inCut === inAll) return { used: cut, partialDays: new Set() };
+
+  const whole = cut.filter((i) => i.day !== lastDay);
+  if (whole.length > 0) return { used: whole, partialDays: new Set() };
+
+  return { used: cut, partialDays: new Set([lastDay]) };
+}
+
+/**
  * AI が返した並べ替え・時刻を受け入れてよいか検証する。
  *
  * モデルの出力をそのまま流すと、行を落としたり増やしたり、
  * 時刻を巻き戻したりしうる。承認前にプレビューを見せる作りではあるが、
  * **壊れた提案はそもそも見せない**。以下を満たさないものは捨てる。
  *
- *  1. その日のIDと過不足なく一致する（追加も削除もしていない）
- *  2. times が itemIds と同数で、"HH:MM" か空文字
- *  3. 時刻が上から順に前後しない
- *  4. 同じパッケージ由来の行が連続している（手動ドラッグと同じ規則）
- *  5. 今の並び・時刻のどちらかが変わっている（同じなら提案する意味がない）
+ *  1. 全体を渡せなかった日ではない
+ *  2. その日のIDと過不足なく一致する（追加も削除もしていない）
+ *  3. times が itemIds と同数で、"HH:MM" か空文字
+ *  4. 時刻が上から順に前後しない
+ *  5. 同じパッケージ由来の行が連続し、塊の中の順番も変わっていない
+ *  6. 今の並び・時刻のどちらかが変わっている（同じなら提案する意味がない）
+ *
+ * 空文字は「決めない」であって「消す」ではない。今の時刻に解決してから
+ * 検証する。NULL で上書きすると、ユーザーが入れた時刻が黙って消える。
  */
-function validateSchedule(schedule: Schedule, items: PlanItemRow[]): Schedule | null {
+function validateSchedule(
+  schedule: Schedule,
+  items: PlanItemRow[],
+  partialDays: Set<number>,
+): Schedule | null {
+  // 1. 全体を見ていない日は扱わない
+  if (partialDays.has(schedule.day)) return null;
+
   const dayItems = items.filter((i) => i.day === schedule.day).sort((a, b) => a.order - b.order);
   if (dayItems.length === 0) return null;
 
   const current = dayItems.map((i) => i.id);
   const proposed = schedule.itemIds;
 
-  // 1. 集合として一致するか
+  // 2. 集合として一致するか
   if (proposed.length !== current.length) return null;
   if (new Set(proposed).size !== proposed.length) return null;
   const known = new Set(current);
   if (!proposed.every((id) => known.has(id))) return null;
 
-  // 2. 時刻の形
-  const times = schedule.times;
-  if (times.length !== proposed.length) return null;
-  if (!times.every((v) => v === '' || HHMM.test(v))) return null;
+  // 3. 時刻の形
+  const raw = schedule.times;
+  if (raw.length !== proposed.length) return null;
+  if (!raw.every((v) => v === '' || HHMM.test(v))) return null;
 
-  // 3. 時刻が巻き戻っていないか。空欄は判定から外す
+  const byId = new Map(dayItems.map((i) => [i.id, i]));
+
+  // 空文字は今の時刻のまま。ここで解決しておくと、以降の判定も
+  // クライアントへ返す値も「反映後の姿」に揃う
+  const times = raw.map(
+    (v, i) => v || (byId.get(proposed[i])?.scheduled_time?.slice(0, 5) ?? ''),
+  );
+
+  // 4. 時刻が巻き戻っていないか。空欄は判定から外す
   const filled = times.filter((v) => v !== '');
   for (let i = 1; i < filled.length; i++) {
     if (filled[i] < filled[i - 1]) return null;
   }
 
-  // 4. 同じパッケージ由来の行が連続しているか
-  const byId = new Map(dayItems.map((i) => [i.id, i]));
-  const runs = new Map<string, number[]>();
+  // 5. パッケージ由来の行は、塊として連続し、中の順番も変わっていないか。
+  //    手動ドラッグ側はパッケージ行を動かせないので、AI 経由だけ
+  //    中身を入れ替えられると、パッケージを見たときと食い違う
+  const runs = new Map<string, { idx: number[]; ids: string[] }>();
   proposed.forEach((id, idx) => {
     const pkg = byId.get(id)?.package_id;
     if (!pkg) return;
-    if (!runs.has(pkg)) runs.set(pkg, []);
-    runs.get(pkg)!.push(idx);
+    if (!runs.has(pkg)) runs.set(pkg, { idx: [], ids: [] });
+    const run = runs.get(pkg)!;
+    run.idx.push(idx);
+    run.ids.push(id);
   });
-  for (const idx of runs.values()) {
-    if (idx[idx.length - 1] - idx[0] !== idx.length - 1) return null;
+  for (const [pkg, run] of runs) {
+    if (run.idx[run.idx.length - 1] - run.idx[0] !== run.idx.length - 1) return null;
+    const currentRun = current.filter((id) => byId.get(id)?.package_id === pkg);
+    if (run.ids.some((id, i) => id !== currentRun[i])) return null;
   }
 
-  // 5. 並びも時刻も今と同じなら返さない
+  // 6. 並びも時刻も今と同じなら返さない
   const sameOrder = proposed.every((id, i) => id === current[i]);
   const sameTimes = proposed.every(
     (id, i) => (byId.get(id)?.scheduled_time?.slice(0, 5) ?? '') === times[i],
@@ -223,7 +273,7 @@ export async function POST(req: NextRequest) {
   }
   // 質問は500字に制限しているのに行程側が無制限だと非対称。
   // 超える分は落とす（黙って全部投げない）
-  const usedItems = (items as PlanItemRow[]).slice(0, MAX_ITEMS);
+  const { used: usedItems, partialDays } = limitItems(items as PlanItemRow[]);
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -247,6 +297,10 @@ export async function POST(req: NextRequest) {
         instructions: SYSTEM_PROMPT,
         input: userContent,
         max_output_tokens: MAX_OUTPUT_TOKENS,
+        // 予算には reasoning トークンも含まれる。既定のままだと20件程度の
+        // 行程でも 1500 を使い切って incomplete になることがあった
+        //（計測: reasoning 1298 / low なら 245）。やることは決まっているので低くする
+        reasoning: { effort: 'low' },
         // 平文だと見出しや記号がモデル任せになり、整形できない。
         // 形を固定してアプリ側で描く
         text: {
@@ -293,6 +347,16 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await res.json().catch(() => null);
+
+  // reasoning トークンも予算に含まれるので、上限に当たると JSON が途中で
+  // 切れる。パース失敗としてまとめると原因が分からなくなる
+  if (body?.status === 'incomplete') {
+    console.error(
+      'plan/advise: response incomplete:',
+      body?.incomplete_details?.reason ?? 'unknown',
+    );
+    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+  }
   // Responses API は output_text に本文がまとまる。無ければ output を辿る
   const text: string =
     body?.output_text ??
@@ -334,6 +398,7 @@ export async function POST(req: NextRequest) {
           reason: String(cand.reason ?? ''),
         },
         usedItems,
+        partialDays,
       );
       if (!schedule) console.warn('plan/advise: schedule rejected by validation');
     }
