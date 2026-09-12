@@ -144,9 +144,14 @@ function typeIcon(type: string) {
  * パッケージ由来の行の名前を変えると、パッケージの中身を見たときと
  * 食い違う。順番を固定しているのと同じ理由で、名前も固定する。
  */
-/** 行程の同一性。IDと並びが変われば、前の提案はもう当てはまらない */
+/**
+ * 行程の同一性。IDと並びが変われば、前の提案はもう当てはまらない。
+ *
+ * 時刻も含める。サーバは "" をリクエスト時点の時刻に解決して返すので、
+ * そのあと手で時刻を直すと、受け入れたときに古い値で上書きされる
+ */
 function planSignature(items: PlanItem[]): string {
-  return items.map((i) => i.id).join(',');
+  return items.map((i) => `${i.id}@${i.scheduled_time ?? ''}`).join(',');
 }
 
 function canEditTitle(item: PlanItem): boolean {
@@ -709,7 +714,10 @@ export default function PlanPage() {
       .filter((i): i is PlanItem => Boolean(i));
 
     const next = [...planItems.filter((i) => i.day !== day), ...applied];
-    setPlanItems(next);
+
+    // 先に画面を変えると、行程が変わったとみなす effect が自分の操作に
+    // 反応して提案カードごと消える（成功表示も出ず、失敗時に再試行もできない）。
+    // 書き込みが通ってから画面を変える
     const ok = await applyPlanSchedule(
       applied.map((i) => i.id),
       // DBに渡すのは "HH:MM"。空文字は「時刻なし」として扱われる
@@ -717,14 +725,16 @@ export default function PlanPage() {
     );
 
     if (ok) {
-      // 自分で当てた変更で提案が陳腐化扱いにならないよう、基準を進める
+      // 自分で当てた変更で提案が陳腐化扱いにならないよう、
+      // 画面を変える前に基準を進める
       adviceSnapshot.current = planSignature(next);
+      setPlanItems(next);
       // 適用済みの提案は消す。残すと何度も押せてしまう
       setAdvice((prev) => (prev ? { ...prev, schedule: null } : prev));
       setReorderApplied(true);
     } else {
       // 失敗しているのに「反映しました」を出すと、DBと食い違ったまま
-      // 再試行の手段も無くなる。提案は残す
+      // 再試行の手段も無くなる。画面も提案もそのままにする
       setReorderError(true);
     }
     setApplyingReorder(false);
