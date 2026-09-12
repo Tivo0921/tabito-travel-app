@@ -375,6 +375,17 @@ export default function PlanPage() {
 
   const handleCollapsePackage = async (packageId: string, title: string) => {
     if (!selectedPlanId) return;
+
+    // 畳むと展開行は削除され、ブロックが引き継ぐのは先頭の開始時刻と
+    // 所要時間の合計だけ。メモや時刻の調整は失われる。
+    // 展開したままの行なら黙って畳んでよいが、手を入れていたら確認する。
+    // 常に確認すると、素直に畳みたいときに邪魔になる。
+    const rows = itemsForDay.filter(
+      (i) => i.package_id === packageId && i.source === 'package' && i.item_type !== 'package',
+    );
+    const edited = rows.some((i) => i.note);
+    if (edited && !confirm(t('plan.package.collapseConfirm'))) return;
+
     setExpandingId(packageId);
     setExpandError(null);
     const block = await collapsePackageInPlan(selectedPlanId, packageId, title);

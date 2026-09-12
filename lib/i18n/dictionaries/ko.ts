@@ -144,6 +144,7 @@ export const ko: Record<TranslationKey, string> = {
   'plan.item.lockedInPackage': '패키지 내 순서는 변경할 수 없습니다',
   'plan.item.reorderFailed': '순서를 저장하지 못했습니다. 페이지를 새로고침해 주세요',
   'plan.package.collapse': '접기',
+  'plan.package.collapseConfirm': '접으면 이 패키지 일정에 작성한 메모가 삭제됩니다. 계속할까요?',
   'plan.item.duration': '소요 시간(분)',
   'plan.item.durationPlaceholder': '예: 60',
   'plan.item.adding': '추가 중...',

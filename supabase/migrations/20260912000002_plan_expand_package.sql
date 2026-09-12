@@ -71,3 +71,41 @@ ALTER TABLE plan_items
 
 COMMENT ON COLUMN plan_items.note IS
   'ユーザーの自由記述。翻訳しない。#16 段階3 では AI の補足にも使う';
+
+-- ────────────────────────────────────────────────
+-- 5. 並べ替えを1往復・原子的にする
+--
+--    アプリ側で1件ずつ UPDATE していたため、
+--      (a) 途中で失敗すると同じ日の中で並びが壊れる
+--          （前半は新しい order、後半は古いまま）
+--      (b) 10件の並べ替えで10往復する
+--    という問題があった。挿入・展開も内部でこれを呼ぶので、
+--    1操作で N+1 リクエストになっていた。
+--
+--    SECURITY INVOKER にする。呼び出したユーザーの権限で動くので、
+--    plan_items の RLS（自分の plan のみ）がそのまま効く。
+--    DEFINER にすると他人の計画も並べ替えられてしまう。
+--
+--    関数内は1トランザクションなので、途中で失敗すれば全部戻る。
+-- ────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION reorder_plan_items(item_ids uuid[])
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+BEGIN
+  -- 一度退避してから振り直す。(plan_id, day, order) に一意制約は無いが、
+  -- 直接書き換えると途中経過で同じ order が並び、順序が不定な瞬間ができる
+  UPDATE plan_items
+  SET "order" = "order" + 100000
+  WHERE id = ANY(item_ids);
+
+  UPDATE plan_items p
+  SET "order" = t.pos
+  FROM (SELECT id, ordinality AS pos FROM unnest(item_ids) WITH ORDINALITY AS u(id, ordinality)) AS t
+  WHERE p.id = t.id;
+END $$;
+
+COMMENT ON FUNCTION reorder_plan_items(uuid[]) IS
+  '渡された順に plan_items.order を 1..N へ振り直す。SECURITY INVOKER なので RLS がそのまま効く';

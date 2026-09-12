@@ -13,6 +13,12 @@ import { createClient } from '@/lib/supabase/server';
 
 const MODEL = process.env.OPENAI_MODEL ?? 'gpt-5.6-luna';
 const MAX_QUESTION_LENGTH = 500;
+/** 出力の上限。無いと長い応答がそのまま課金される */
+const MAX_OUTPUT_TOKENS = 1500;
+/** 上流が返さないと Vercel の関数タイムアウトまで掴んだままになる */
+const UPSTREAM_TIMEOUT_MS = 30_000;
+/** 行程側にも上限を置く。質問だけ制限しても、アイテムを大量に作れば入力を膨らませられる */
+const MAX_ITEMS = 60;
 
 /** 1ユーザーあたりの呼び出し制限。減速帯であって上限ではない（本当の歯止めは課金側の上限） */
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -22,6 +28,13 @@ const recentCalls = new Map<string, number[]>();
 function rateLimited(userId: string): boolean {
   const now = Date.now();
   const hits = (recentCalls.get(userId) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+
+  // 先に判定する。push してから判定すると、弾かれた相手ほど
+  // 自分の配列を伸ばし、毎回それを filter することになる
+  if (hits.length >= RATE_LIMIT_MAX) {
+    recentCalls.set(userId, hits);
+    return true;
+  }
   hits.push(now);
   recentCalls.set(userId, hits);
   if (recentCalls.size > 1000) {
@@ -29,7 +42,7 @@ function rateLimited(userId: string): boolean {
       if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) recentCalls.delete(key);
     }
   }
-  return hits.length > RATE_LIMIT_MAX;
+  return false;
 }
 
 const SYSTEM_PROMPT = `あなたは日本旅行のコンシェルジュです。ユーザーが組んだ行程を読み、実際に動けるかを検討して助言します。
@@ -135,6 +148,9 @@ export async function POST(req: NextRequest) {
   if (!items || items.length === 0) {
     return NextResponse.json({ error: 'empty_plan' }, { status: 400 });
   }
+  // 質問は500字に制限しているのに行程側が無制限だと非対称。
+  // 超える分は落とす（黙って全部投げない）
+  const usedItems = (items as PlanItemRow[]).slice(0, MAX_ITEMS);
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -143,7 +159,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
   }
 
-  const itinerary = renderItinerary(plan, items as PlanItemRow[]);
+  const itinerary = renderItinerary(plan, usedItems);
   const userContent = q
     ? `${itinerary}\n---\n質問: ${q}`
     : `${itinerary}\n---\nこの行程について助言してください。`;
@@ -157,7 +173,9 @@ export async function POST(req: NextRequest) {
         model: MODEL,
         instructions: SYSTEM_PROMPT,
         input: userContent,
+        max_output_tokens: MAX_OUTPUT_TOKENS,
       }),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch (e) {
     console.error('plan/advise fetch failed:', e);
