@@ -72,7 +72,7 @@ export default function ProfileEditPage() {
           {/* 画像の差し替えは未実装。カメラボタンとファイル入力は置いてあったが
               input に onChange が無く、選んでも何も起きなかった。
               押せるのに動かないUIは無いより悪いので、実装が入るまで出さない。
-              アップロード基盤（Storage・リサイズ・旧画像削除）は #42 で扱う。 */}
+              アップロード基盤（Storage・リサイズ・旧画像削除）は #53 で扱う。 */}
           <p className="text-xs text-[var(--muted)] mt-2">{t('profileEdit.avatarFromGoogle')}</p>
         </div>
 

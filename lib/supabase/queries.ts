@@ -1221,6 +1221,11 @@ export async function registerAsGuide(
   location = location.trim();
   bio = bio.trim();
 
+  // 0個は誰にも案内できない状態になるので作らせない。
+  // updateMyGuideProfile 側にも同じ境界があり、片方だけ抜けていた
+  const normalizedLanguages = languages.filter(Boolean);
+  if (normalizedLanguages.length === 0) return null;
+
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
 
   const { data: guide, error: guideError } = await supabase
@@ -1229,7 +1234,7 @@ export async function registerAsGuide(
       user_id: user.id,
       location,
       // 以前は ['ja','ko'] 固定だった。登録時に選べるようにした #42
-      languages: languages.filter(Boolean),
+      languages: normalizedLanguages,
       avatar_url: avatarUrl,
     })
     .select()

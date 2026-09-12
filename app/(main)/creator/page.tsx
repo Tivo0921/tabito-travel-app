@@ -30,6 +30,7 @@ import {
 } from '@/lib/supabase/queries';
 import type { Guide } from '@/lib/types';
 import { useT, useLocale } from '@/lib/i18n/provider';
+import { isLocale } from '@/lib/i18n/locales';
 import { formatPrice } from '@/lib/i18n/format';
 
 type CreatorPackage = {
@@ -122,11 +123,17 @@ export default function CreatorPage() {
     if (!guide) return;
     // 現在値を入れてから開く。空欄から始めると、直したい項目以外まで
     // 打ち直させることになる
+    // guides.languages には旧データとして表示名（['日本語','英語']）が
+    // 入っている行がある（#47）。そのまま渡すとどのトグルとも一致せず
+    // 全て未選択で開き、1つ押すと ['日本語','英語','ja'] と混ざってしまう。
+    // 「最後の1つは外させない」ガードがあるので手で消しきれない。
+    // 知らない値は落とし、保存すれば正規化される形にする。
+    const known = guide.languages.filter(isLocale);
     setEditDraft({
       name: guide.name,
       location: guide.location,
       bio: guide.bio,
-      languages: guide.languages.length > 0 ? guide.languages : ['ja'],
+      languages: known.length > 0 ? known : ['ja'],
     });
     setProfileError(null);
     setEditing(true);
