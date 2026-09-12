@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -239,6 +239,9 @@ export default function PlanPage() {
   // AI に今の行程を見てもらう #16
   const [advice, setAdvice] = useState<PlanAdvice | null>(null);
   const [applyingReorder, setApplyingReorder] = useState(false);
+  // 提案を適用したあとの控えめな確認表示
+  const [reorderApplied, setReorderApplied] = useState(false);
+  const aiInputRef = useRef<HTMLInputElement>(null);
   const [askingAi, setAskingAi] = useState(false);
   const [aiError, setAiError] = useState<'empty' | 'rate' | 'unavailable' | 'failed' | null>(null);
 
@@ -595,7 +598,25 @@ export default function PlanPage() {
     if (!ok) setReorderError(true);
     // 適用済みの提案は消す。残すと何度も押せてしまう
     setAdvice((prev) => (prev ? { ...prev, reorder: null } : prev));
+    setReorderApplied(true);
     setApplyingReorder(false);
+  };
+
+  /** 前の質問を残して聞き直す。会話は保持していないので、毎回行程ごと送り直す */
+  const handleAskAgain = () => {
+    setAdvice(null);
+    setAiError(null);
+    setReorderApplied(false);
+    aiInputRef.current?.focus();
+  };
+
+  /** 話題を変える。前の質問文も消す */
+  const handleNewTopic = () => {
+    setAdvice(null);
+    setAiError(null);
+    setReorderApplied(false);
+    setAiPrompt('');
+    aiInputRef.current?.focus();
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -629,6 +650,7 @@ export default function PlanPage() {
           </div>
           <div className="flex gap-2">
             <input
+              ref={aiInputRef}
               type="text"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
@@ -683,7 +705,7 @@ export default function PlanPage() {
                   <p className="text-sm text-[var(--text-main)] mb-3">{advice.reorder.reason}</p>
 
                   {/* 適用前に何がどう変わるか見せる。承認してから書き換える */}
-                  <ol className="mb-3 space-y-1">
+                  <ol className="space-y-1">
                     {advice.reorder.itemIds.map((id, i) => {
                       const it = planItems.find((x) => x.id === id);
                       if (!it) return null;
@@ -695,16 +717,41 @@ export default function PlanPage() {
                       );
                     })}
                   </ol>
+                </div>
+              )}
 
+              {reorderApplied && (
+                <p className="px-1 text-xs text-[var(--primary)] font-medium">
+                  {t('plan.ai.reorderApplied')}
+                </p>
+              )}
+
+              {/* 読んだあとに何ができるかを出す。提案は承認したときだけ反映する */}
+              <div className="flex flex-wrap gap-2">
+                {advice.reorder && (
                   <button
                     onClick={handleApplyReorder}
                     disabled={applyingReorder}
-                    className="w-full py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                    className="flex-1 min-w-[140px] py-2.5 px-3 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-50"
                   >
-                    {t(applyingReorder ? 'plan.ai.applying' : 'plan.ai.applyReorder')}
+                    {t(applyingReorder ? 'plan.ai.applying' : 'plan.ai.accept')}
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={handleAskAgain}
+                  disabled={applyingReorder}
+                  className="flex-1 min-w-[120px] py-2.5 px-3 bg-white border border-[var(--border)] rounded-lg text-sm font-medium text-[var(--text-sub)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-50"
+                >
+                  {t('plan.ai.askAgain')}
+                </button>
+                <button
+                  onClick={handleNewTopic}
+                  disabled={applyingReorder}
+                  className="flex-1 min-w-[120px] py-2.5 px-3 bg-white border border-[var(--border)] rounded-lg text-sm font-medium text-[var(--text-sub)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-50"
+                >
+                  {t('plan.ai.newTopic')}
+                </button>
+              </div>
 
               <p className="text-xs text-[var(--muted)] px-1">{t('plan.ai.generated')}</p>
             </div>
