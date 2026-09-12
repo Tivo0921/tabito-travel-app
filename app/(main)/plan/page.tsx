@@ -19,6 +19,10 @@ import {
   ChevronUp,
   Loader2,
   StickyNote,
+  AlertTriangle,
+  Lightbulb,
+  CheckCircle2,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   DndContext,
@@ -68,6 +72,51 @@ const ITEM_TYPES: { value: PlanItem['item_type']; labelKey: TranslationKey; icon
  * 所要時間が無ければ開始時刻だけ返す（勝手に終了時刻を作らない）。
  * 日をまたぐ場合も素直に翌日の時刻を出す。
  */
+/** 助言の1区画。項目が無ければ何も描かない（空の見出しを出さない）#52 */
+function AdviceSection({
+  items,
+  label,
+  icon,
+  tone,
+}: {
+  items: string[];
+  label: string;
+  icon: React.ReactNode;
+  tone: 'warn' | 'primary' | 'muted';
+}) {
+  if (!items || items.length === 0) return null;
+
+  const color =
+    tone === 'warn' ? 'text-amber-600'
+    : tone === 'primary' ? 'text-[var(--primary)]'
+    : 'text-[var(--text-sub)]';
+
+  return (
+    <div className="p-4 bg-white rounded-xl">
+      <div className={cn('flex items-center gap-1.5 mb-2', color)}>
+        {icon}
+        <span className="text-xs font-semibold">{label}</span>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((line, i) => (
+          <li key={i} className="text-sm text-[var(--text-main)] leading-relaxed flex gap-2">
+            <span className={cn('flex-shrink-0', color)}>•</span>
+            <span>{line}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** /api/plan/advise の応答。平文ではなく形を固定して受け取る #52 */
+type PlanAdvice = {
+  concerns: string[];
+  suggestions: string[];
+  checks: string[];
+  reorder: { day: number; itemIds: string[]; reason: string } | null;
+};
+
 function timeRange(scheduled: string | null, durationMinutes: number | null): string | null {
   if (!scheduled) return null;
   const start = scheduled.slice(0, 5);
@@ -188,7 +237,8 @@ export default function PlanPage() {
   const [activeDay, setActiveDay] = useState(1);
   const [aiPrompt, setAiPrompt] = useState('');
   // AI に今の行程を見てもらう #16
-  const [advice, setAdvice] = useState<string | null>(null);
+  const [advice, setAdvice] = useState<PlanAdvice | null>(null);
+  const [applyingReorder, setApplyingReorder] = useState(false);
   const [askingAi, setAskingAi] = useState(false);
   const [aiError, setAiError] = useState<'empty' | 'rate' | 'unavailable' | 'failed' | null>(null);
 
@@ -515,14 +565,37 @@ export default function PlanPage() {
       if (res.status === 429) { setAiError('rate'); return; }
       if (res.status === 503) { setAiError('unavailable'); return; }
       if (!res.ok) { setAiError('failed'); return; }
-      const data = (await res.json()) as { advice?: string };
-      if (data.advice) setAdvice(data.advice);
+      const data = (await res.json()) as PlanAdvice;
+      const hasContent =
+        data.concerns?.length || data.suggestions?.length || data.checks?.length || data.reorder;
+      if (hasContent) setAdvice(data);
       else setAiError('failed');
     } catch {
       setAiError('failed');
     } finally {
       setAskingAi(false);
     }
+  };
+
+  const handleApplyReorder = async () => {
+    if (!advice?.reorder) return;
+    const { day, itemIds } = advice.reorder;
+    setApplyingReorder(true);
+
+    // 提案どおりに並べ替える。サーバ側で「IDの過不足が無い」「パッケージの
+    // 塊が分断されていない」を検証済みなので、ここでは並べるだけ
+    const byId = new Map(planItems.map((i) => [i.id, i]));
+    const reordered = itemIds
+      .map((id) => byId.get(id))
+      .filter((i): i is PlanItem => Boolean(i))
+      .map((it, idx) => ({ ...it, order: idx + 1 }));
+
+    setPlanItems((prev) => [...prev.filter((i) => i.day !== day), ...reordered]);
+    const ok = await reorderPlanItems(reordered.map((i) => i.id));
+    if (!ok) setReorderError(true);
+    // 適用済みの提案は消す。残すと何度も押せてしまう
+    setAdvice((prev) => (prev ? { ...prev, reorder: null } : prev));
+    setApplyingReorder(false);
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -577,9 +650,63 @@ export default function PlanPage() {
           {/* 行程を書き換えず、読み物として出す。手で組んだ予定を
               AI が黙って上書きするのは避ける #16 */}
           {advice && (
-            <div className="mt-3 p-4 bg-white rounded-xl">
-              <p className="text-xs text-[var(--muted)] mb-2">{t('plan.ai.generated')}</p>
-              <p className="text-sm text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">{advice}</p>
+            <div className="mt-3 space-y-2">
+              {/* 平文をそのまま流すと見出しや記号がモデル任せになる。
+                  形を固定して、こちらで整形する #52 */}
+              <AdviceSection
+                items={advice.concerns}
+                label={t('plan.ai.concerns')}
+                icon={<AlertTriangle className="w-4 h-4" />}
+                tone="warn"
+              />
+              <AdviceSection
+                items={advice.suggestions}
+                label={t('plan.ai.suggestions')}
+                icon={<Lightbulb className="w-4 h-4" />}
+                tone="primary"
+              />
+              <AdviceSection
+                items={advice.checks}
+                label={t('plan.ai.checks')}
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                tone="muted"
+              />
+
+              {advice.reorder && (
+                <div className="p-4 bg-white rounded-xl border border-[var(--primary)]/30">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <ArrowUpDown className="w-4 h-4 text-[var(--primary)]" />
+                    <span className="text-xs font-semibold text-[var(--primary)]">
+                      {t('plan.ai.reorderTitle', { day: advice.reorder.day })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[var(--text-main)] mb-3">{advice.reorder.reason}</p>
+
+                  {/* 適用前に何がどう変わるか見せる。承認してから書き換える */}
+                  <ol className="mb-3 space-y-1">
+                    {advice.reorder.itemIds.map((id, i) => {
+                      const it = planItems.find((x) => x.id === id);
+                      if (!it) return null;
+                      return (
+                        <li key={id} className="text-xs text-[var(--text-sub)] flex gap-2">
+                          <span className="text-[var(--muted)] flex-shrink-0">{i + 1}.</span>
+                          <span className="truncate">{it.title}</span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+
+                  <button
+                    onClick={handleApplyReorder}
+                    disabled={applyingReorder}
+                    className="w-full py-2.5 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                  >
+                    {t(applyingReorder ? 'plan.ai.applying' : 'plan.ai.applyReorder')}
+                  </button>
+                </div>
+              )}
+
+              <p className="text-xs text-[var(--muted)] px-1">{t('plan.ai.generated')}</p>
             </div>
           )}
 

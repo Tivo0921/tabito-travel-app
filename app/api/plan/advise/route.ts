@@ -48,26 +48,29 @@ function rateLimited(userId: string): boolean {
 const SYSTEM_PROMPT = `あなたは日本旅行のコンシェルジュです。ユーザーが組んだ行程を読み、実際に動けるかを検討して助言します。
 
 守ること:
-- 行程に書かれている場所名・パッケージ名は**そのまま引用**し、言い換えたり翻訳したりしない
-- 移動時間や営業時間の**実データは与えられていない**。断定せず「確認したほうがよい」と伝える
-- 存在しない店や施設を新しく作らない。挙げるなら一般に知られた場所に留め、確認を促す
-- 指摘は具体的に。「余裕がない」ではなく「10:00の次が10:15で、移動時間が取れていない」のように書く
-- 簡潔に。箇条書き中心で、前置きは書かない
+- 場所名・パッケージ名は行程に書かれたまま引用する。言い換えも翻訳もしない
+- 移動時間や営業時間の実データは与えられていない。断定せず「確認したほうがよい」と伝える
+- 存在しない店や施設を新しく作らない
+- 各項目は1文。40文字以内。**や##や・などの記号は使わない（アプリ側が整形する）
+- 指摘は具体的に。「余裕がない」ではなく「10:00の次が10:15で移動時間がない」と書く
+- 該当が無い項目は空配列にする。無理に埋めない
 
-出力の構成:
-1. 気になる点（時間の詰まり、順序、移動の無駄）
-2. 提案（順序の入れ替えや時間の調整。具体的に）
-3. 確認したほうがよいこと（営業時間・混雑・交通など）
-
-該当が無い項目は省略してよい。`;
+reorder について:
+- 順番を変えたほうがよいと判断したときだけ返す。不要なら null
+- 同じ日の中でのみ並べ替える。日をまたがない
+- **与えられたIDを過不足なく全て含める。** 追加も削除もしない
+- [package] の行が連続している塊は、順番を崩さず塊のまま動かす
+- reason は1文、40文字以内`;
 
 type PlanItemRow = {
+  id: string;
   day: number;
   order: number;
   item_type: string;
   title: string;
   scheduled_time: string | null;
   duration_minutes: number | null;
+  package_id: string | null;
 };
 
 function renderItinerary(
@@ -92,11 +95,57 @@ function renderItinerary(
     for (const it of byDay.get(day)!.sort((a, b) => a.order - b.order)) {
       const start = it.scheduled_time?.slice(0, 5) ?? '時刻未定';
       const dur = it.duration_minutes ? `${it.duration_minutes}分` : '所要時間未設定';
-      lines.push(`  - ${start} [${it.item_type}] ${it.title}（${dur}）`);
+      // id を渡さないと reorder で行を指せない
+      lines.push(`  - id=${it.id} ${start} [${it.item_type}] ${it.title}（${dur}）`);
     }
     lines.push('');
   }
   return lines.join('\n');
+}
+
+type Reorder = { day: number; itemIds: string[]; reason: string };
+
+/**
+ * AI が返した並べ替えを受け入れてよいか検証する。
+ *
+ * モデルの出力をそのまま流すと、行を落としたり増やしたりしうる。
+ * 承認前にプレビューを見せる作りではあるが、**壊れた提案はそもそも
+ * 見せない**。以下を満たさないものは捨てる。
+ *
+ *  1. その日のIDと過不足なく一致する（追加も削除もしていない）
+ *  2. 同じパッケージ由来の行が連続している（手動ドラッグと同じ規則）
+ *  3. 今の並びと違う（同じなら提案する意味がない）
+ */
+function validateReorder(reorder: Reorder, items: PlanItemRow[]): Reorder | null {
+  const dayItems = items.filter((i) => i.day === reorder.day).sort((a, b) => a.order - b.order);
+  if (dayItems.length === 0) return null;
+
+  const current = dayItems.map((i) => i.id);
+  const proposed = reorder.itemIds;
+
+  // 1. 集合として一致するか
+  if (proposed.length !== current.length) return null;
+  if (new Set(proposed).size !== proposed.length) return null;
+  const known = new Set(current);
+  if (!proposed.every((id) => known.has(id))) return null;
+
+  // 2. 同じパッケージ由来の行が連続しているか
+  const byId = new Map(dayItems.map((i) => [i.id, i]));
+  const runs = new Map<string, number[]>();
+  proposed.forEach((id, idx) => {
+    const pkg = byId.get(id)?.package_id;
+    if (!pkg) return;
+    if (!runs.has(pkg)) runs.set(pkg, []);
+    runs.get(pkg)!.push(idx);
+  });
+  for (const idx of runs.values()) {
+    if (idx[idx.length - 1] - idx[0] !== idx.length - 1) return null;
+  }
+
+  // 3. 今と同じなら返さない
+  if (proposed.every((id, i) => id === current[i])) return null;
+
+  return { day: reorder.day, itemIds: proposed, reason: reorder.reason };
 }
 
 export async function POST(req: NextRequest) {
@@ -136,7 +185,7 @@ export async function POST(req: NextRequest) {
 
   const { data: items, error: itemsError } = await supabase
     .from('plan_items')
-    .select('day, order, item_type, title, scheduled_time, duration_minutes')
+    .select('id, day, order, item_type, title, scheduled_time, duration_minutes, package_id')
     .eq('plan_id', planId)
     .order('day')
     .order('order');
@@ -174,6 +223,35 @@ export async function POST(req: NextRequest) {
         instructions: SYSTEM_PROMPT,
         input: userContent,
         max_output_tokens: MAX_OUTPUT_TOKENS,
+        // 平文だと見出しや記号がモデル任せになり、整形できない。
+        // 形を固定してアプリ側で描く
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'plan_advice',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['concerns', 'suggestions', 'checks', 'reorder'],
+              properties: {
+                concerns: { type: 'array', items: { type: 'string' } },
+                suggestions: { type: 'array', items: { type: 'string' } },
+                checks: { type: 'array', items: { type: 'string' } },
+                reorder: {
+                  type: ['object', 'null'],
+                  additionalProperties: false,
+                  required: ['day', 'itemIds', 'reason'],
+                  properties: {
+                    day: { type: 'integer' },
+                    itemIds: { type: 'array', items: { type: 'string' } },
+                    reason: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
       }),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
@@ -189,7 +267,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await res.json().catch(() => null);
-  // Responses API は output_text に平文がまとまる。無ければ output を辿る
+  // Responses API は output_text に本文がまとまる。無ければ output を辿る
   const text: string =
     body?.output_text ??
     (body?.output ?? [])
@@ -203,5 +281,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
   }
 
-  return NextResponse.json({ advice: text });
+  let parsed: {
+    concerns?: unknown; suggestions?: unknown; checks?: unknown; reorder?: unknown;
+  } | null = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    console.error('plan/advise: response was not JSON', text.slice(0, 200));
+    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+  }
+
+  const asLines = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : [];
+
+  // reorder はモデルの出力なので、通す前に必ず検証する
+  let reorder: Reorder | null = null;
+  const r = parsed?.reorder;
+  if (r && typeof r === 'object') {
+    const cand = r as Partial<Reorder>;
+    if (typeof cand.day === 'number' && Array.isArray(cand.itemIds)) {
+      reorder = validateReorder(
+        { day: cand.day, itemIds: cand.itemIds as string[], reason: String(cand.reason ?? '') },
+        usedItems,
+      );
+      if (!reorder) console.warn('plan/advise: reorder rejected by validation');
+    }
+  }
+
+  return NextResponse.json({
+    concerns: asLines(parsed?.concerns),
+    suggestions: asLines(parsed?.suggestions),
+    checks: asLines(parsed?.checks),
+    reorder,
+  });
 }
