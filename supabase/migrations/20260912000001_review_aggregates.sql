@@ -149,3 +149,41 @@ FROM (
   GROUP BY gg.id
 ) AS agg
 WHERE g.id = agg.id;
+
+-- ────────────────────────────────────────────────
+-- 5. reviews の UPDATE が購入を再確認していなかった
+--
+--    reviews_update_own は WITH CHECK が user_id しか見ておらず、
+--    package_id の変更を許していた。INSERT は購入者に限定されているのに、
+--
+--      1. 購入済みAにレビューを投稿する（正規の経路）
+--      2. その行の package_id を未購入Bに書き換える
+--
+--    で、未購入パッケージの評価を操作できる。
+--
+--    これは以前からある穴だが、これまで packages.rating はシード値で
+--    レビューと連動していなかったため実害が無かった。上のトリガーで
+--    評価と直結した結果、初めて評価操作の経路として機能する。
+--
+--    ローカルで再現を確認済み:
+--      未購入Bへの直接 INSERT → RLS で拒否
+--      A→B への package_id 付け替え → 通り、Bが rating=1.00 / count=1 になる
+--
+--    INSERT と同じ条件を WITH CHECK に入れて塞ぐ。
+-- ────────────────────────────────────────────────
+DROP POLICY IF EXISTS "reviews_update_own" ON reviews;
+
+CREATE POLICY "reviews_update_own"
+  ON reviews FOR UPDATE
+  TO authenticated
+  USING (user_id = (SELECT auth.uid()))
+  WITH CHECK (
+    user_id = (SELECT auth.uid())
+    AND package_id IN (
+      SELECT package_id FROM purchases
+      WHERE user_id = (SELECT auth.uid()) AND status = 'completed'
+    )
+  );
+
+COMMENT ON POLICY "reviews_update_own" ON reviews IS
+  '自分のレビューのみ更新可。package_id の付け替えを防ぐため INSERT と同じ購入条件を WITH CHECK に持つ';
