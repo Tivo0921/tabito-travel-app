@@ -177,8 +177,12 @@ export interface PlanItem {
   duration_minutes: number | null;
   spot_id: string | null;
   manner_tip_id: string | null;
-  /** item_type === 'package' の行だけが持つ（DB の CHECK で保証） */
+  /** 由来のパッケージ。ブロック本体でも、展開したスポット行でも入る #16 */
   package_id: string | null;
+  /** manual=手入力 / package=パッケージから展開 / ai=AI生成（将来） */
+  source: 'manual' | 'package' | 'ai';
+  /** 自由記述。何を食べるか・どの電車か・注意点など。翻訳しない */
+  note: string | null;
   /** 表示用にJOINで解決したパッケージ情報。行そのものには無い */
   package?: PlanItemPackage;
 }
