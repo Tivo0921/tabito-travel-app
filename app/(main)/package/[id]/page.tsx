@@ -25,6 +25,9 @@ import {
   getPackageById,
   getSpotsByPackageId,
   getReviewsByPackageId,
+  getMyReview,
+  submitReview,
+  type SaveResult,
   isPackageSaved,
   savePackage,
   unsavePackage,
@@ -46,6 +49,13 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
   const [activeTab, setActiveTab] = useState<TabType>('about');
   const [isSaved, setIsSaved] = useState(false);
   const [isPurchased, setIsPurchased] = useState(false);
+
+  // レビュー投稿 #33
+  const [myReview, setMyReview] = useState<Review | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
@@ -64,6 +74,14 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
     getReviewsByPackageId(id).then(setReviews);
     isPackageSaved(id).then(setIsSaved);
     hasPurchased(id).then(setIsPurchased);
+    // 既に書いていれば編集として開く。UNIQUE(package_id,user_id) で1人1件
+    getMyReview(id).then((r) => {
+      setMyReview(r);
+      if (r) {
+        setReviewRating(r.rating);
+        setReviewComment(r.comment);
+      }
+    });
     // チャットを出す条件:
     //   購入済み・クリエイターにアカウントがある・自分自身でない、の3つすべて。
     //   購入判定が無いと未購入者にもボタンが見え、押しても
@@ -138,6 +156,28 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
       setPurchaseError(t('package.error.network'));
       setPurchasing(false);
     }
+  };
+
+  const handleSubmitReview = async () => {
+    if (reviewRating < 1) return;
+    setSubmittingReview(true);
+    setReviewError(null);
+    const result = await submitReview(id, reviewRating, reviewComment);
+    if (result === 'ok') {
+      // 一覧と自分のレビューを引き直す。評価の平均と件数は DB の
+      // トリガーが更新するので、パッケージ側も取り直す必要がある
+      const [rs, mine, pkgData] = await Promise.all([
+        getReviewsByPackageId(id),
+        getMyReview(id),
+        getPackageById(id, locale),
+      ]);
+      setReviews(rs);
+      setMyReview(mine);
+      if (pkgData) setPkg(pkgData);
+    } else {
+      setReviewError(result);
+    }
+    setSubmittingReview(false);
   };
 
   const handleStartGuide = () => {
@@ -246,11 +286,13 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
               <Clock className="w-4 h-4" />
               {formatDuration(pkg.duration_minutes, t)}
             </span>
-            <span className="flex items-center gap-1">
-              <Star className="w-4 h-4 fill-[var(--primary)] text-[var(--primary)]" />
-              <span className="font-semibold">{pkg.rating}</span>
-              <span className="text-[var(--muted)]">({pkg.review_count})</span>
-            </span>
+            {pkg.review_count > 0 && (
+              <span className="flex items-center gap-1">
+                <Star className="w-4 h-4 fill-[var(--primary)] text-[var(--primary)]" />
+                <span className="font-semibold">{pkg.rating}</span>
+                <span className="text-[var(--muted)]">({pkg.review_count})</span>
+              </span>
+            )}
           </div>
 
           {/* Purchased badge */}
@@ -371,6 +413,63 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
 
           {activeTab === 'review' && (
             <div className="space-y-4">
+              {/* 投稿フォーム。購入者だけに出す。RLS も
+                  status='completed' の購入者のみ許可している #33 */}
+              {isPurchased && (
+                <div className="p-4 bg-white border border-[var(--border)] rounded-2xl space-y-3">
+                  <p className="font-medium text-[var(--text-main)]">
+                    {t(myReview ? 'package.review.editTitle' : 'package.review.writeTitle')}
+                  </p>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setReviewRating(i + 1)}
+                        disabled={submittingReview}
+                        aria-label={t('package.review.starLabel', { count: i + 1 })}
+                        className="p-1 disabled:opacity-60"
+                      >
+                        <Star
+                          className={cn(
+                            'w-7 h-7 transition-colors',
+                            i < reviewRating
+                              ? 'fill-[var(--primary)] text-[var(--primary)]'
+                              : 'text-gray-300',
+                          )}
+                        />
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder={t('package.review.commentPlaceholder')}
+                    rows={3}
+                    maxLength={500}
+                    disabled={submittingReview}
+                    className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none disabled:opacity-60"
+                  />
+
+                  {reviewError && (
+                    <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                      {t(reviewError === 'forbidden' ? 'package.review.forbidden' : 'package.review.failed')}
+                    </p>
+                  )}
+
+                  <CTAButton
+                    onClick={handleSubmitReview}
+                    fullWidth
+                    disabled={reviewRating < 1 || submittingReview}
+                    loading={submittingReview}
+                  >
+                    {t(myReview ? 'package.review.update' : 'package.review.submit')}
+                  </CTAButton>
+                </div>
+              )}
+
               {reviews.length > 0 ? (
                 reviews.map((review) => (
                   <div key={review.id} className="p-4 bg-gray-50 rounded-2xl">
