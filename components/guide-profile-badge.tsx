@@ -48,10 +48,13 @@ export function GuideProfileBadge({ guide, variant = 'default' }: GuideProfileBa
             <MapPin className="w-3.5 h-3.5" />
             {guide.location}
           </span>
-          <span className="flex items-center gap-1">
-            <Star className="w-3.5 h-3.5 fill-[var(--primary)] text-[var(--primary)]" />
-            {guide.rating}
-          </span>
+          {/* レビュー0件で「★0」を出さない #33 */}
+          {guide.review_count > 0 && (
+            <span className="flex items-center gap-1">
+              <Star className="w-3.5 h-3.5 fill-[var(--primary)] text-[var(--primary)]" />
+              {guide.rating}
+            </span>
+          )}
         </div>
       </div>
     </div>

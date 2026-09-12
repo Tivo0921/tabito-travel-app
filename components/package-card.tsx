@@ -48,11 +48,16 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 fill-[var(--primary)] text-[var(--primary)]" />
-                <span className="text-xs font-medium">{pkg.rating}</span>
-                <span className="text-xs text-[var(--muted)]">({pkg.review_count})</span>
-              </div>
+              {/* レビュー0件で「★0 (0)」を出さない。評価があるように見える #33 */}
+              {pkg.review_count > 0 ? (
+                <div className="flex items-center gap-1">
+                  <Star className="w-3.5 h-3.5 fill-[var(--primary)] text-[var(--primary)]" />
+                  <span className="text-xs font-medium">{pkg.rating}</span>
+                  <span className="text-xs text-[var(--muted)]">({pkg.review_count})</span>
+                </div>
+              ) : (
+                <span className="text-xs text-[var(--muted)]">{t('package.review.none')}</span>
+              )}
               <span className="text-sm font-bold text-[var(--primary)]">
                 {formatPrice(pkg.price, locale, t)}
               </span>
@@ -111,11 +116,15 @@ export function PackageCard({ package: pkg, variant = 'default' }: PackageCardPr
             </span>
           </div>
           <div className="flex items-center justify-between pt-3 border-t border-[var(--border)]">
-            <div className="flex items-center gap-1.5">
-              <Star className="w-4 h-4 fill-[var(--primary)] text-[var(--primary)]" />
-              <span className="font-semibold">{pkg.rating}</span>
-              <span className="text-[var(--muted)]">({pkg.review_count})</span>
-            </div>
+            {pkg.review_count > 0 ? (
+              <div className="flex items-center gap-1.5">
+                <Star className="w-4 h-4 fill-[var(--primary)] text-[var(--primary)]" />
+                <span className="font-semibold">{pkg.rating}</span>
+                <span className="text-[var(--muted)]">({pkg.review_count})</span>
+              </div>
+            ) : (
+              <span className="text-sm text-[var(--muted)]">{t('package.review.none')}</span>
+            )}
             <span className="text-lg font-bold text-[var(--primary)]">
               {formatPrice(pkg.price, locale, t)}
             </span>
