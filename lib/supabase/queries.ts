@@ -904,6 +904,8 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
       spot_id: row.spot_id,
       manner_tip_id: row.manner_tip_id,
       package_id: row.package_id,
+      source: row.source as PlanItem['source'],
+      note: row.note,
       // パッケージが削除されると package_id は SET NULL になり、
       // タイトルだけが行に残る。ここも undefined になるので、
       // 表示側は「もう無いパッケージ」として描ける
@@ -918,6 +920,8 @@ export async function addPlanItem(
   item_type: PlanItem['item_type'],
   title: string,
   scheduled_time?: string,
+  duration_minutes?: number | null,
+  note?: string | null,
 ): Promise<PlanItem | null> {
   const supabase = createClient();
 
@@ -941,6 +945,10 @@ export async function addPlanItem(
       item_type,
       title,
       scheduled_time: scheduled_time || null,
+      // 移動や食事にも所要時間を持たせる。終了時刻が出ないと
+      // 次の予定を何時から置けるのか分からない
+      duration_minutes: duration_minutes ?? null,
+      note: note?.trim() || null,
     })
     .select()
     .single();
@@ -962,6 +970,8 @@ export async function addPlanItem(
     spot_id: data.spot_id,
     manner_tip_id: data.manner_tip_id,
     package_id: data.package_id,
+    source: data.source as PlanItem['source'],
+    note: data.note,
   } satisfies PlanItem;
 }
 
@@ -1070,10 +1080,326 @@ export async function addPlanPackage(
     spot_id: data.spot_id,
     manner_tip_id: data.manner_tip_id,
     package_id: data.package_id,
+    source: data.source as PlanItem['source'],
+    note: data.note,
     package: pkg,
   } satisfies PlanItem;
 
   return { ok: true, item };
+}
+
+export type ExpandPackageResult =
+  | { ok: true; items: PlanItem[] }
+  | { ok: false; reason: 'no-spots' | 'error' };
+
+/**
+ * パッケージを行程に展開する。#16 段階1
+ *
+ * spots を順番どおり plan_items に並べ、滞在時間から時刻を積むだけ。
+ * **AI は使わない。** 決定的にしておけば安いし壊れないし、
+ * ユーザーが結果を予測できる。
+ *
+ * ブロック1行を、スポットN行に置き換える。置き換えなので
+ * 「展開したのにブロックも残る」二重表示にはならない。
+ *
+ * 開始時刻はブロックが持っていた scheduled_time を引き継ぐ。
+ * 時刻が無い場合は時刻なしで並べる（勝手に9:00などを置かない。
+ * ユーザーが決めた予定に見えてしまう）。
+ */
+export async function expandPackageIntoPlan(
+  blockItem: PlanItem,
+): Promise<ExpandPackageResult> {
+  const supabase = createClient();
+  if (!blockItem.package_id) return { ok: false, reason: 'error' };
+
+  const spots = await getSpotsByPackageId(blockItem.package_id);
+  if (spots.length === 0) return { ok: false, reason: 'no-spots' };
+
+  // 開始時刻。無ければ時刻なしで並べる
+  let cursor: number | null = null;
+  if (blockItem.scheduled_time) {
+    const [h, m] = blockItem.scheduled_time.split(':').map(Number);
+    if (Number.isFinite(h) && Number.isFinite(m)) cursor = h * 60 + m;
+  }
+
+  const rows = spots.map((spot, i) => {
+    let scheduled: string | null = null;
+    if (cursor !== null && cursor < 24 * 60) {
+      scheduled = `${String(Math.floor(cursor / 60)).padStart(2, '0')}:${String(cursor % 60).padStart(2, '0')}`;
+      cursor += spot.duration_minutes || 0;
+    }
+    return {
+      plan_id: blockItem.plan_id,
+      day: blockItem.day,
+      // ブロックの位置に差し込む。後続アイテムとの前後関係は order の
+      // 小数を使えないので、ブロックの order から連番で詰める
+      order: blockItem.order + i,
+      item_type: 'spot' as const,
+      title: spot.name,
+      scheduled_time: scheduled,
+      duration_minutes: spot.duration_minutes || null,
+      spot_id: spot.id,
+      package_id: blockItem.package_id,
+      source: 'package' as const,
+    };
+  });
+
+  const { data, error } = await supabase.from('plan_items').insert(rows).select('*');
+
+  if (error || !data) {
+    console.error('expandPackageIntoPlan insert failed:', error?.code, error?.message);
+    return { ok: false, reason: 'error' };
+  }
+
+  // 元のブロックを消す。先に消すと、insert が失敗したときに
+  // 行程からパッケージが消えて何も残らない
+  const { error: delError } = await supabase
+    .from('plan_items')
+    .delete()
+    .eq('id', blockItem.id);
+
+  if (delError) {
+    // 展開は成功しているので全体は失敗にしない。ブロックが残るだけ。
+    // ユーザーは手で消せる
+    console.error('expandPackageIntoPlan: block delete failed:', delError.message);
+  }
+
+  return {
+    ok: true,
+    items: data.map((row) => ({
+      id: row.id,
+      plan_id: row.plan_id,
+      day: row.day,
+      order: row.order,
+      item_type: row.item_type as PlanItem['item_type'],
+      title: row.title,
+      scheduled_time: row.scheduled_time,
+      duration_minutes: row.duration_minutes,
+      spot_id: row.spot_id,
+      manner_tip_id: row.manner_tip_id,
+      package_id: row.package_id,
+      source: row.source as PlanItem['source'],
+      note: row.note,
+    } satisfies PlanItem)),
+  };
+}
+
+/**
+ * その日のアイテムを指定した並びに揃える。#16
+ *
+ * order は int なので、間に挿し込むための小数が使えない。
+ * 1日ぶんを 1..N に振り直す。1日のアイテム数はたかが知れているので、
+ * 小数で詰めていって桁が枯れるより単純で壊れない。
+ *
+ * 一部だけ失敗すると順序が壊れるので、失敗したらその旨を返して
+ * 呼び出し側に引き直させる。
+ */
+export async function reorderPlanItems(orderedIds: string[]): Promise<boolean> {
+  const supabase = createClient();
+  if (orderedIds.length === 0) return true;
+
+  // 1件ずつ UPDATE していたが、途中で失敗すると同じ日の中で並びが壊れ
+  //（前半は新しい order、後半は古いまま）、10件で10往復していた。
+  // 挿入・展開も内部でこれを呼ぶので、1操作が N+1 リクエストになっていた。
+  // RPC にまとめて1往復・1トランザクションにする。
+  // SECURITY INVOKER なので plan_items の RLS がそのまま効く。
+  const { error } = await supabase.rpc('reorder_plan_items', { item_ids: orderedIds });
+
+  if (error) {
+    console.error('reorderPlanItems failed:', error.code, error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 指定位置にアイテムを足す。
+ *
+ * position は「その日の何番目に入れるか」（0 始まり）。
+ * 末尾に足すだけだと、あとから間に入れたいときに全部作り直しになる。
+ *
+ * 挿入後にその日を 1..N へ振り直す。呼び出し側は戻り値の並びで
+ * 画面を更新する。
+ */
+export async function insertPlanItemAt(
+  planId: string,
+  day: number,
+  position: number,
+  item_type: PlanItem['item_type'],
+  title: string,
+  scheduled_time?: string,
+  duration_minutes?: number | null,
+  note?: string | null,
+): Promise<PlanItem | null> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('plan_items')
+    .insert({
+      plan_id: planId,
+      day,
+      // いったん末尾より大きい値で入れ、このあと振り直す。
+      // 既存と衝突しない値ならなんでもよい
+      order: 100000 + position,
+      item_type,
+      title,
+      scheduled_time: scheduled_time || null,
+      duration_minutes: duration_minutes ?? null,
+      note: note?.trim() || null,
+    })
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    console.error('insertPlanItemAt failed:', error?.code, error?.message);
+    return null;
+  }
+
+  return {
+    id: data.id,
+    plan_id: data.plan_id,
+    day: data.day,
+    order: data.order,
+    item_type: data.item_type as PlanItem['item_type'],
+    title: data.title,
+    scheduled_time: data.scheduled_time,
+    duration_minutes: data.duration_minutes,
+    spot_id: data.spot_id,
+    manner_tip_id: data.manner_tip_id,
+    package_id: data.package_id,
+    source: data.source as PlanItem['source'],
+    note: data.note,
+  } satisfies PlanItem;
+}
+
+/**
+ * 展開したスポット行を、パッケージのブロック1行に戻す。#16
+ *
+ * 展開時に package_id と source='package' を残しているので、
+ * 「この計画のこのパッケージ由来の行」だけを選んで畳める。
+ * 手で足した予定（source='manual'）は巻き込まない。
+ *
+ * 先頭行の時刻と、展開行の所要時間の合計をブロックに引き継ぐ。
+ * 展開→折りたたみを往復しても、開始時刻と所要時間が保たれる。
+ */
+export async function collapsePackageInPlan(
+  planId: string,
+  packageId: string,
+  packageTitle: string,
+): Promise<PlanItem | null> {
+  const supabase = createClient();
+
+  // 表示用のパッケージ情報を先に取る。これが無いと PackageBlock が
+  // 「パッケージが無い＝削除された」と判断して、消えていないのに
+  // 「配信を終了しました」を出してしまう。
+  // 行を書き換えたあとで失敗すると、DBは畳んだ状態なのに画面は展開のまま
+  // という食い違いが残るので、何も変更しないうちに失敗させる。
+  const { data: pkgRow, error: pkgError } = await supabase
+    .from('packages')
+    .select(`
+      id, image_url, spot_count, duration_minutes,
+      areas(name),
+      package_translations(title),
+      guides(guide_translations(name))
+    `)
+    .eq('id', packageId)
+    .eq('package_translations.language', DEFAULT_LANG)
+    .maybeSingle();
+
+  if (pkgError || !pkgRow) {
+    console.error('collapsePackageInPlan package fetch failed:', pkgError?.message ?? 'not found');
+    return null;
+  }
+
+  const { data: rows, error } = await supabase
+    .from('plan_items')
+    .select('id, day, order, scheduled_time, duration_minutes')
+    .eq('plan_id', planId)
+    .eq('package_id', packageId)
+    .eq('source', 'package')
+    .neq('item_type', 'package')
+    .order('day')
+    .order('order');
+
+  if (error || !rows || rows.length === 0) {
+    console.error('collapsePackageInPlan: nothing to collapse', error?.message);
+    return null;
+  }
+
+  const first = rows[0];
+  const total = rows.reduce((sum, r) => sum + (r.duration_minutes ?? 0), 0);
+
+  const { data: block, error: insertError } = await supabase
+    .from('plan_items')
+    .insert({
+      plan_id: planId,
+      day: first.day,
+      order: first.order,
+      item_type: 'package',
+      title: packageTitle,
+      scheduled_time: first.scheduled_time,
+      duration_minutes: total || null,
+      package_id: packageId,
+      source: 'package',
+    })
+    .select('*')
+    .single();
+
+  if (insertError || !block) {
+    console.error('collapsePackageInPlan insert failed:', insertError?.code, insertError?.message);
+    return null;
+  }
+
+  // ブロックを作れてから消す。逆順だと、insert に失敗したときに
+  // 行程からパッケージが丸ごと消える
+  const { error: delError } = await supabase
+    .from('plan_items')
+    .delete()
+    .in('id', rows.map((r) => r.id));
+
+  if (delError) {
+    console.error('collapsePackageInPlan delete failed:', delError.message);
+    // ブロックと展開行が二重に残る。呼び出し側が引き直せば実態が見える
+  }
+
+
+  return {
+    id: block.id,
+    plan_id: block.plan_id,
+    day: block.day,
+    order: block.order,
+    item_type: 'package',
+    title: block.title,
+    scheduled_time: block.scheduled_time,
+    duration_minutes: block.duration_minutes,
+    spot_id: block.spot_id,
+    manner_tip_id: block.manner_tip_id,
+    package_id: block.package_id,
+    source: block.source as PlanItem['source'],
+    note: block.note,
+    package: planItemPackage(pkgRow),
+  } satisfies PlanItem;
+}
+
+/**
+ * アイテムのメモを書き換える。
+ * 「何を食べるか」「どの電車か」「何に気をつけるか」を残す欄。#16
+ */
+export async function updatePlanItemNote(itemId: string, note: string): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('plan_items')
+    .update({ note: note.trim() || null })
+    .eq('id', itemId)
+    .select('id');
+
+  // RLS に弾かれると error ではなく0件で返る。0件を成功にすると
+  // 「保存した」のに残っていない状態になる
+  if (error || !data || data.length === 0) {
+    console.error('updatePlanItemNote failed:', error?.message ?? '0 rows affected');
+    return false;
+  }
+  return true;
 }
 
 export async function deletePlanItem(itemId: string): Promise<void> {
@@ -1281,6 +1607,7 @@ export async function registerAsGuide(
   name: string,
   location: string,
   bio: string,
+  languages: string[],
 ): Promise<Guide | null> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -1297,6 +1624,11 @@ export async function registerAsGuide(
   location = location.trim();
   bio = bio.trim();
 
+  // 0個は誰にも案内できない状態になるので作らせない。
+  // updateMyGuideProfile 側にも同じ境界があり、片方だけ抜けていた
+  const normalizedLanguages = languages.filter(Boolean);
+  if (normalizedLanguages.length === 0) return null;
+
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
 
   const { data: guide, error: guideError } = await supabase
@@ -1304,7 +1636,8 @@ export async function registerAsGuide(
     .insert({
       user_id: user.id,
       location,
-      languages: ['ja', 'ko'],
+      // 以前は ['ja','ko'] 固定だった。登録時に選べるようにした #42
+      languages: normalizedLanguages,
       avatar_url: avatarUrl,
     })
     .select()
@@ -1373,6 +1706,8 @@ export interface GuideProfileInput {
   name: string;
   bio: string;
   location: string;
+  /** 案内できる言語。空配列は許さない（呼び出し側で1つ以上を保証する）#42 */
+  languages: string[];
 }
 
 /**
@@ -1398,9 +1733,14 @@ export async function updateMyGuideProfile(
   const bio = input.bio.trim();
   const location = input.location.trim();
 
+  // 0個は誰にも案内できない状態になるので保存しない。UI 側でも
+  // 最後の1つを外せないようにしているが、境界はここで決める
+  const languages = input.languages.filter(Boolean);
+  if (languages.length === 0) return 'error';
+
   const { data, error } = await supabase
     .from('guides')
-    .update({ location })
+    .update({ location, languages })
     .eq('user_id', user.id)
     .select('id');
 

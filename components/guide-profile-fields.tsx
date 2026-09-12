@@ -1,11 +1,15 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n/provider';
+import { LOCALES, LOCALE_NATIVE_NAMES, type Locale } from '@/lib/i18n/locales';
 
 export type GuideProfileDraft = {
   name: string;
   location: string;
   bio: string;
+  /** 案内できる言語。最低1つ必須（0個だと誰にも案内できないため）#42 */
+  languages: string[];
 };
 
 /**
@@ -65,6 +69,44 @@ export function GuideProfileFields({
           disabled={disabled}
           className={`${field} resize-none`}
         />
+      </div>
+
+      {/* 案内できる言語。登録時 ['ja','ko'] 固定で選べなかった #42 */}
+      <div>
+        <label className="block text-xs font-medium text-[var(--text-sub)] mb-1">
+          {t('creator.register.languages')}
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {LOCALES.map((locale) => {
+            const selected = value.languages.includes(locale);
+            return (
+              <button
+                key={locale}
+                type="button"
+                disabled={disabled}
+                onClick={() => onChange({
+                  ...value,
+                  // 最後の1つは外させない。0個だと誰にも案内できない状態になる
+                  languages: selected
+                    ? (value.languages.length > 1
+                        ? value.languages.filter((l) => l !== locale)
+                        : value.languages)
+                    : [...value.languages, locale],
+                })}
+                aria-pressed={selected}
+                className={cn(
+                  'px-4 py-2 rounded-xl text-sm font-medium border transition-colors disabled:opacity-60',
+                  selected
+                    ? 'bg-[var(--primary)] text-white border-[var(--primary)]'
+                    : 'bg-white text-[var(--text-sub)] border-[var(--border)] hover:border-[var(--primary)]',
+                )}
+              >
+                {LOCALE_NATIVE_NAMES[locale as Locale]}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-[var(--muted)] mt-1.5">{t('creator.register.languagesHint')}</p>
       </div>
     </>
   );

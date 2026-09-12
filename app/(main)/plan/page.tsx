@@ -8,6 +8,7 @@ import {
   Calendar,
   MapPin,
   Package as PackageIcon,
+  ListPlus,
   Sparkles,
   ChevronRight,
   Clock,
@@ -16,7 +17,23 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Loader2,
+  StickyNote,
 } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { SortableItem } from '@/components/sortable-item';
 import { cn } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
 import {
@@ -25,9 +42,14 @@ import {
   deletePlan,
   getPlanItems,
   addPlanItem,
+  insertPlanItemAt,
+  updatePlanItemNote,
+  reorderPlanItems,
   deletePlanItem,
   getPurchasedPackagesForPlan,
   addPlanPackage,
+  expandPackageIntoPlan,
+  collapsePackageInPlan,
 } from '@/lib/supabase/queries';
 import type { Plan, PlanItem, PlanItemPackage } from '@/lib/types';
 import { useT } from '@/lib/i18n/provider';
@@ -40,6 +62,22 @@ const ITEM_TYPES: { value: PlanItem['item_type']; labelKey: TranslationKey; icon
   { value: 'transport', labelKey: 'plan.itemType.transport', icon: '✈️' },
   { value: 'manner', labelKey: 'plan.itemType.manner', icon: '📝' },
 ];
+
+/**
+ * 開始時刻と所要時間から「10:00 – 11:00」を作る。
+ * 所要時間が無ければ開始時刻だけ返す（勝手に終了時刻を作らない）。
+ * 日をまたぐ場合も素直に翌日の時刻を出す。
+ */
+function timeRange(scheduled: string | null, durationMinutes: number | null): string | null {
+  if (!scheduled) return null;
+  const start = scheduled.slice(0, 5);
+  if (!durationMinutes) return start;
+  const [h, m] = scheduled.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return start;
+  const end = (h * 60 + m + durationMinutes) % (24 * 60);
+  const endStr = `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+  return `${start} – ${endStr}`;
+}
 
 function typeIcon(type: string) {
   return ITEM_TYPES.find((t) => t.value === type)?.icon ?? '📍';
@@ -59,9 +97,13 @@ function getDayCount(plan: Plan): number {
 function PackageBlock({
   item,
   t,
+  onExpand,
+  expanding,
 }: {
   item: PlanItem;
   t: ReturnType<typeof useT>;
+  onExpand: () => void;
+  expanding: boolean;
 }) {
   const pkg = item.package;
 
@@ -116,6 +158,28 @@ function PackageBlock({
   );
 }
 
+/** ブロックを各スポットの行に展開するボタン。#16 段階1 */
+function ExpandPackageButton({
+  onExpand,
+  expanding,
+  t,
+}: {
+  onExpand: () => void;
+  expanding: boolean;
+  t: ReturnType<typeof useT>;
+}) {
+  return (
+    <button
+      onClick={onExpand}
+      disabled={expanding}
+      className="mt-2 w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-[var(--border)] rounded-lg text-xs text-[var(--text-sub)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors disabled:opacity-50"
+    >
+      <ListPlus className="w-3.5 h-3.5" />
+      {t(expanding ? 'plan.package.expanding' : 'plan.package.expand')}
+    </button>
+  );
+}
+
 export default function PlanPage() {
   const t = useT();
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -123,6 +187,10 @@ export default function PlanPage() {
   const [planItems, setPlanItems] = useState<PlanItem[]>([]);
   const [activeDay, setActiveDay] = useState(1);
   const [aiPrompt, setAiPrompt] = useState('');
+  // AI に今の行程を見てもらう #16
+  const [advice, setAdvice] = useState<string | null>(null);
+  const [askingAi, setAskingAi] = useState(false);
+  const [aiError, setAiError] = useState<'empty' | 'rate' | 'unavailable' | 'failed' | null>(null);
 
   // 新規プランモーダル（2ステップ）
   const [showNewPlan, setShowNewPlan] = useState(false);
@@ -132,12 +200,23 @@ export default function PlanPage() {
   const [newStart, setNewStart] = useState('');
   const [newEnd, setNewEnd] = useState('');
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(false);
 
   // アイテム追加モーダル
   const [showAddItem, setShowAddItem] = useState(false);
   const [newItemTitle, setNewItemTitle] = useState('');
   const [newItemType, setNewItemType] = useState<PlanItem['item_type']>('spot');
   const [newItemTime, setNewItemTime] = useState('');
+  const [newItemDuration, setNewItemDuration] = useState('');
+  // どこに挿し込むか。null = 末尾
+  const [newItemNote, setNewItemNote] = useState('');
+  const [insertAt, setInsertAt] = useState<number | null>(null);
+  // 既存アイテムのメモ編集
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  const [reorderError, setReorderError] = useState(false);
+  const [splitWarning, setSplitWarning] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
 
   // 購入済みパッケージをブロックとして置く #16
@@ -146,6 +225,10 @@ export default function PlanPage() {
   const [loadingPurchased, setLoadingPurchased] = useState(false);
   const [addingPackageId, setAddingPackageId] = useState<string | null>(null);
   const [packageError, setPackageError] = useState<'duplicate' | 'failed' | null>(null);
+
+  // パッケージを行程に展開する #16 段階1
+  const [expandingId, setExpandingId] = useState<string | null>(null);
+  const [expandError, setExpandError] = useState<'no-spots' | 'failed' | null>(null);
 
   useEffect(() => {
     getMyPlans().then((data) => {
@@ -201,19 +284,26 @@ export default function PlanPage() {
     setNewLocation('');
     setNewStart('');
     setNewEnd('');
+    setCreateError(false);
     setShowNewPlan(true);
   };
 
   const handleCreatePlan = async () => {
     if (!newTitle.trim()) return;
     setCreating(true);
+    setCreateError(false);
     const plan = await createPlan(newTitle, newLocation, newStart, newEnd);
     if (plan) {
       setPlans((prev) => [plan, ...prev]);
       setSelectedPlanId(plan.id);
       setPlanItems([]);
+      setShowNewPlan(false);
+    } else {
+      // 失敗してもモーダルを閉じていたため、何も起きていないのに
+      // 成功したように見えていた。ログイン切れでも同じ見え方になる。
+      // 閉じずに理由を出し、入力も捨てない
+      setCreateError(true);
     }
-    setShowNewPlan(false);
     setCreating(false);
   };
 
@@ -230,15 +320,137 @@ export default function PlanPage() {
   const handleAddItem = async () => {
     if (!selectedPlanId || !newItemTitle.trim()) return;
     setAddingItem(true);
-    const item = await addPlanItem(selectedPlanId, activeDay, newItemType, newItemTitle, newItemTime || undefined);
+
+    const duration = newItemDuration ? parseInt(newItemDuration, 10) : null;
+    const position = insertAt ?? itemsForDay.length;
+
+    const item = insertAt === null
+      ? await addPlanItem(
+          selectedPlanId, activeDay, newItemType, newItemTitle,
+          newItemTime || undefined, duration, newItemNote,
+        )
+      : await insertPlanItemAt(
+          selectedPlanId, activeDay, position, newItemType, newItemTitle,
+          newItemTime || undefined, duration, newItemNote,
+        );
+
     if (item) {
-      setPlanItems((prev) => [...prev, item]);
+      // 挿し込んだ位置に置いてから、その日を 1..N に振り直す
+      const next = [...itemsForDay];
+      next.splice(position, 0, item);
+      const renumbered = next.map((it, i) => ({ ...it, order: i + 1 }));
+      setPlanItems((prev) => [
+        ...prev.filter((i) => !(i.day === activeDay)),
+        ...renumbered,
+      ]);
+      if (insertAt !== null) {
+        const ok = await reorderPlanItems(renumbered.map((i) => i.id));
+        if (!ok) {
+          // 並び順だけDBと食い違うので、次回の読み込みで直る。
+          // 黙って放置せず伝える
+          setReorderError(true);
+        }
+      }
     }
+
     setNewItemTitle('');
     setNewItemType('spot');
     setNewItemTime('');
+    setNewItemDuration('');
+    setNewItemNote('');
+    setInsertAt(null);
     setShowAddItem(false);
     setAddingItem(false);
+  };
+
+  const handleSaveNote = async (itemId: string) => {
+    setSavingNote(true);
+    const ok = await updatePlanItemNote(itemId, noteDraft);
+    if (ok) {
+      setPlanItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, note: noteDraft.trim() || null } : i)));
+      setEditingNoteId(null);
+    }
+    setSavingNote(false);
+  };
+
+  const handleCollapsePackage = async (packageId: string, title: string) => {
+    if (!selectedPlanId) return;
+
+    // 畳むと展開行は削除され、ブロックが引き継ぐのは先頭の開始時刻と
+    // 所要時間の合計だけ。メモや時刻の調整は失われる。
+    // 展開したままの行なら黙って畳んでよいが、手を入れていたら確認する。
+    // 常に確認すると、素直に畳みたいときに邪魔になる。
+    const rows = itemsForDay.filter(
+      (i) => i.package_id === packageId && i.source === 'package' && i.item_type !== 'package',
+    );
+    const edited = rows.some((i) => i.note);
+    if (edited && !confirm(t('plan.package.collapseConfirm'))) return;
+
+    setExpandingId(packageId);
+    setExpandError(null);
+    const block = await collapsePackageInPlan(selectedPlanId, packageId, title);
+    if (block) {
+      const rest = itemsForDay.filter(
+        (i) => !(i.package_id === packageId && i.source === 'package' && i.item_type !== 'package'),
+      );
+      const insertPos = rest.findIndex((i) => i.order > block.order);
+      const merged = insertPos < 0
+        ? [...rest, block]
+        : [...rest.slice(0, insertPos), block, ...rest.slice(insertPos)];
+      const renumbered = merged.map((it, i) => ({ ...it, order: i + 1 }));
+
+      setPlanItems((prev) => [...prev.filter((i) => i.day !== block.day), ...renumbered]);
+      const ok = await reorderPlanItems(renumbered.map((i) => i.id));
+      if (!ok) setReorderError(true);
+    } else {
+      setExpandError('failed');
+    }
+    setExpandingId(null);
+  };
+
+  // ドラッグで並べ替える。dnd-kit の PointerSensor はタッチでも動く
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // 軽く触れただけで並べ替えが始まらないようにする。
+      // リンクや削除ボタンのタップを奪わない
+      activationConstraint: { distance: 6 },
+    }),
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = itemsForDay.findIndex((i) => i.id === active.id);
+    const newIndex = itemsForDay.findIndex((i) => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const moved = arrayMove(itemsForDay, oldIndex, newIndex).map((it, i) => ({ ...it, order: i + 1 }));
+
+    // 同じパッケージ由来の行は連続していなければならない。
+    // 間に別の予定が割り込むと、パッケージの中身を見たときの順番と
+    // 食い違って見える
+    const runs = new Map<string, number[]>();
+    moved.forEach((it, i) => {
+      if (it.source !== 'package' || !it.package_id) return;
+      if (!runs.has(it.package_id)) runs.set(it.package_id, []);
+      runs.get(it.package_id)!.push(i);
+    });
+    const splits = [...runs.values()].some(
+      (idx) => idx[idx.length - 1] - idx[0] !== idx.length - 1,
+    );
+    if (splits) {
+      setReorderError(false);
+      setSplitWarning(true);
+      return;
+    }
+    setSplitWarning(false);
+    // 先に画面を動かす。往復を待たせるとドラッグの手応えが無くなる
+    setPlanItems((prev) => [...prev.filter((i) => i.day !== activeDay), ...moved]);
+    setReorderError(false);
+
+    const ok = await reorderPlanItems(moved.map((i) => i.id));
+    if (!ok) setReorderError(true);
   };
 
   const openAddPackage = async () => {
@@ -263,6 +475,54 @@ export default function PlanPage() {
       setPackageError(result.reason === 'duplicate' ? 'duplicate' : 'failed');
     }
     setAddingPackageId(null);
+  };
+
+  const handleExpandPackage = async (item: PlanItem) => {
+    setExpandingId(item.id);
+    setExpandError(null);
+    const result = await expandPackageIntoPlan(item);
+    if (result.ok) {
+      // 展開はブロックの order から連番で詰めるので、後続アイテムと
+      // order がぶつかる。その日を 1..N に振り直して並びを確定させる
+      const rest = itemsForDay.filter((i) => i.id !== item.id);
+      const insertPos = rest.findIndex((i) => i.order > item.order);
+      const merged = insertPos < 0
+        ? [...rest, ...result.items]
+        : [...rest.slice(0, insertPos), ...result.items, ...rest.slice(insertPos)];
+      const renumbered = merged.map((it, i) => ({ ...it, order: i + 1 }));
+
+      setPlanItems((prev) => [...prev.filter((i) => i.day !== item.day), ...renumbered]);
+      const ok = await reorderPlanItems(renumbered.map((i) => i.id));
+      if (!ok) setReorderError(true);
+    } else {
+      setExpandError(result.reason === 'no-spots' ? 'no-spots' : 'failed');
+    }
+    setExpandingId(null);
+  };
+
+  const handleAskAi = async () => {
+    if (!selectedPlanId) return;
+    setAskingAi(true);
+    setAiError(null);
+    setAdvice(null);
+    try {
+      const res = await fetch('/api/plan/advise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: selectedPlanId, question: aiPrompt.trim() }),
+      });
+      if (res.status === 400) { setAiError('empty'); return; }
+      if (res.status === 429) { setAiError('rate'); return; }
+      if (res.status === 503) { setAiError('unavailable'); return; }
+      if (!res.ok) { setAiError('failed'); return; }
+      const data = (await res.json()) as { advice?: string };
+      if (data.advice) setAdvice(data.advice);
+      else setAiError('failed');
+    } catch {
+      setAiError('failed');
+    } finally {
+      setAskingAi(false);
+    }
   };
 
   const handleDeleteItem = async (itemId: string) => {
@@ -303,12 +563,36 @@ export default function PlanPage() {
               className="flex-1 px-4 py-3 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
             <button
-              onClick={() => setAiPrompt('')}
-              className="p-3 bg-[var(--primary)] rounded-xl hover:bg-[var(--primary)]/90 transition-colors"
+              onClick={handleAskAi}
+              disabled={!selectedPlanId || askingAi}
+              aria-label={t('plan.ai.send')}
+              className="p-3 bg-[var(--primary)] rounded-xl hover:bg-[var(--primary)]/90 transition-colors disabled:opacity-50"
             >
-              <Send className="w-5 h-5 text-white" />
+              {askingAi
+                ? <Loader2 className="w-5 h-5 text-white animate-spin" />
+                : <Send className="w-5 h-5 text-white" />}
             </button>
           </div>
+
+          {/* 行程を書き換えず、読み物として出す。手で組んだ予定を
+              AI が黙って上書きするのは避ける #16 */}
+          {advice && (
+            <div className="mt-3 p-4 bg-white rounded-xl">
+              <p className="text-xs text-[var(--muted)] mb-2">{t('plan.ai.generated')}</p>
+              <p className="text-sm text-[var(--text-main)] whitespace-pre-wrap leading-relaxed">{advice}</p>
+            </div>
+          )}
+
+          {aiError && (
+            <p role="alert" className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+              {t(
+                aiError === 'empty' ? 'plan.ai.emptyPlan'
+                : aiError === 'rate' ? 'plan.ai.rateLimited'
+                : aiError === 'unavailable' ? 'plan.ai.unavailable'
+                : 'plan.ai.failed'
+              )}
+            </p>
+          )}
         </div>
       </div>
 
@@ -407,8 +691,37 @@ export default function PlanPage() {
                   </p>
                 ) : (
                   <div className="space-y-3">
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={itemsForDay.map((i) => i.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
                     {itemsForDay.map((item, index) => (
-                      <div key={item.id} className="relative flex gap-3">
+                      <div key={item.id}>
+                        {/* 行の前に挿し込む導線。末尾にしか足せないと、
+                            間に予定を入れたいとき全部作り直しになる */}
+                        <button
+                          onClick={() => { setInsertAt(index); setShowAddItem(true); }}
+                          aria-label={t('plan.item.insertHere')}
+                          className="w-full h-5 flex items-center justify-center group"
+                        >
+                          <span className="w-full h-px bg-transparent group-hover:bg-[var(--primary)]/30 transition-colors" />
+                          <Plus className="w-3.5 h-3.5 text-transparent group-hover:text-[var(--primary)] flex-shrink-0 transition-colors" />
+                          <span className="w-full h-px bg-transparent group-hover:bg-[var(--primary)]/30 transition-colors" />
+                        </button>
+                      <SortableItem
+                        id={item.id}
+                        handleLabel={t('plan.item.dragHandle')}
+                        // パッケージ由来の行は並べ替えさせない。ここで入れ替えると
+                        // パッケージの中身を見たときの順番と食い違う
+                        disabled={item.source === 'package'}
+                        disabledHint={t('plan.item.lockedInPackage')}
+                      >
+                      <div className="relative flex gap-3">
                         {index !== itemsForDay.length - 1 && (
                           <div className="absolute left-[23px] top-10 w-0.5 h-[calc(100%+12px)] bg-gray-200" />
                         )}
@@ -427,16 +740,97 @@ export default function PlanPage() {
                           {item.item_type === 'package' ? (
                             /* パッケージは「中に体験が入っている塊」なので、
                                ただの予定より情報量を持たせて開けるようにする */
-                            <PackageBlock item={item} t={t} />
+                            <>
+                              <PackageBlock
+                                item={item}
+                                t={t}
+                                onExpand={() => handleExpandPackage(item)}
+                                expanding={expandingId === item.id}
+                              />
+                              {item.package && (
+                                <ExpandPackageButton
+                                  onExpand={() => handleExpandPackage(item)}
+                                  expanding={expandingId === item.id}
+                                  t={t}
+                                />
+                              )}
+                            </>
                           ) : (
-                            <p className="font-medium text-[var(--text-main)]">{item.title}</p>
+                            <div>
+                              <p className="font-medium text-[var(--text-main)]">{item.title}</p>
+                              {/* 展開元が分かるようにする。手で足した予定と
+                                  パッケージ由来を見分けられないと、まとめて消せない */}
+                              {item.source === 'package' && item.package && (
+                                <div className="flex items-center gap-2">
+                                  <p className="text-xs text-[var(--muted)] truncate">
+                                    {t('plan.package.fromPackage', { title: item.package.title })}
+                                  </p>
+                                  {/* 展開したままだと戻せないので、畳む導線を出す。
+                                      同じパッケージ由来の行がまとめて1ブロックに戻る */}
+                                  <button
+                                    onClick={() => handleCollapsePackage(item.package_id!, item.package!.title)}
+                                    disabled={expandingId === item.package_id}
+                                    className="flex-shrink-0 text-xs text-[var(--primary)] font-medium hover:underline disabled:opacity-50"
+                                  >
+                                    {t('plan.package.collapse')}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                           {item.scheduled_time && (
                             <p className="text-sm text-[var(--muted)] flex items-center gap-1 mt-1">
                               <Clock className="w-3 h-3" />
-                              {item.scheduled_time.slice(0, 5)}
+                              {timeRange(item.scheduled_time, item.duration_minutes)}
                               {item.duration_minutes ? ` ・ ${formatDuration(item.duration_minutes, t)}` : ''}
                             </p>
+                          )}
+
+                          {/* メモ。何を食べるか・どの電車か・注意点を残す欄 #16 */}
+                          {editingNoteId === item.id ? (
+                            <div className="mt-2 space-y-2">
+                              <textarea
+                                value={noteDraft}
+                                onChange={(e) => setNoteDraft(e.target.value)}
+                                placeholder={t('plan.item.notePlaceholder')}
+                                rows={2}
+                                maxLength={500}
+                                disabled={savingNote}
+                                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none disabled:opacity-60"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setEditingNoteId(null)}
+                                  disabled={savingNote}
+                                  className="px-3 py-1.5 border border-[var(--border)] rounded-lg text-xs disabled:opacity-50"
+                                >
+                                  {t('common.cancel')}
+                                </button>
+                                <button
+                                  onClick={() => handleSaveNote(item.id)}
+                                  disabled={savingNote}
+                                  className="px-3 py-1.5 bg-[var(--primary)] text-white rounded-lg text-xs font-medium disabled:opacity-50"
+                                >
+                                  {t('common.save')}
+                                </button>
+                              </div>
+                            </div>
+                          ) : item.note ? (
+                            <button
+                              onClick={() => { setNoteDraft(item.note ?? ''); setEditingNoteId(item.id); }}
+                              className="mt-1.5 w-full text-left flex items-start gap-1.5 text-sm text-[var(--text-sub)] hover:text-[var(--text-main)] transition-colors"
+                            >
+                              <StickyNote className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-[var(--muted)]" />
+                              <span className="whitespace-pre-wrap">{item.note}</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => { setNoteDraft(''); setEditingNoteId(item.id); }}
+                              className="mt-1.5 flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--primary)] transition-colors"
+                            >
+                              <StickyNote className="w-3 h-3" />
+                              {t('plan.item.addNote')}
+                            </button>
                           )}
                         </div>
 
@@ -447,8 +841,41 @@ export default function PlanPage() {
                           <Trash2 className="w-4 h-4 text-red-400" />
                         </button>
                       </div>
+                      </SortableItem>
+                      </div>
                     ))}
+                      </SortableContext>
+                    </DndContext>
+
+                    {/* 末尾に足す導線 */}
+                    <button
+                      onClick={() => { setInsertAt(null); setShowAddItem(true); }}
+                      aria-label={t('plan.item.insertHere')}
+                      className="w-full h-5 flex items-center justify-center group"
+                    >
+                      <span className="w-full h-px bg-transparent group-hover:bg-[var(--primary)]/30 transition-colors" />
+                      <Plus className="w-3.5 h-3.5 text-transparent group-hover:text-[var(--primary)] flex-shrink-0 transition-colors" />
+                      <span className="w-full h-px bg-transparent group-hover:bg-[var(--primary)]/30 transition-colors" />
+                    </button>
                   </div>
+                )}
+
+                {splitWarning && (
+                  <p role="alert" className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-700">
+                    {t('plan.item.cannotSplitPackage')}
+                  </p>
+                )}
+
+                {reorderError && (
+                  <p role="alert" className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                    {t('plan.item.reorderFailed')}
+                  </p>
+                )}
+
+                {expandError && (
+                  <p role="alert" className="mt-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                    {t(expandError === 'no-spots' ? 'plan.package.expandNoSpots' : 'plan.package.expandFailed')}
+                  </p>
                 )}
 
                 <div className="mt-4 space-y-2">
@@ -569,6 +996,11 @@ export default function PlanPage() {
                     {t('common.next')}
                   </CTAButton>
                 </div>
+              )}
+              {createError && (
+                <p role="alert" className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+                  {t('plan.new.failed')}
+                </p>
               )}
               {wizardStep === 2 && (
                 <div className="flex gap-3">
@@ -733,13 +1165,42 @@ export default function PlanPage() {
                     className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.time')}</label>
+                    <input
+                      type="time"
+                      value={newItemTime}
+                      onChange={(e) => setNewItemTime(e.target.value)}
+                      className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    />
+                  </div>
+                  <div>
+                    {/* 所要時間が無いと終了時刻が出ず、次の予定を何時から
+                        置けるのか分からない。移動や食事にも必要 */}
+                    <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.duration')}</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      step={5}
+                      value={newItemDuration}
+                      onChange={(e) => setNewItemDuration(e.target.value)}
+                      placeholder={t('plan.item.durationPlaceholder')}
+                      className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    />
+                  </div>
+                </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.time')}</label>
-                  <input
-                    type="time"
-                    value={newItemTime}
-                    onChange={(e) => setNewItemTime(e.target.value)}
-                    className="w-full px-4 py-3 border border-[var(--border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  {/* 何を食べるか・どの電車か・注意点を残す欄 #16 */}
+                  <label className="block text-sm font-medium text-[var(--text-main)] mb-2">{t('plan.item.note')}</label>
+                  <textarea
+                    value={newItemNote}
+                    onChange={(e) => setNewItemNote(e.target.value)}
+                    placeholder={t('plan.item.notePlaceholder')}
+                    rows={2}
+                    maxLength={500}
+                    className="w-full px-4 py-3 border border-[var(--border)] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none"
                   />
                 </div>
               </div>
