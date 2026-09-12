@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getMyProfile, updateMyProfile, type SaveResult } from '@/lib/supabase/queries';
 import { CTAButton } from '@/components/cta-button';
 import type { User } from '@supabase/supabase-js';
 import { useT } from '@/lib/i18n/provider';
@@ -18,28 +19,63 @@ export default function ProfileEditPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // 読み込みより先に入力を始めたか。fetch が返ってから setState すると
+  // 打ち込んだ文字が消える。unmount 用の cancelled では防げない
+  const dirty = useRef(false);
 
   useEffect(() => {
+    // 画面を離れたあとに setState しないためのフラグ
+    let cancelled = false;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return; }
       setUser(data.user);
-      setDisplayName(data.user.user_metadata?.full_name ?? '');
-      setBio(data.user.user_metadata?.bio ?? '');
       setAvatarUrl(data.user.user_metadata?.avatar_url);
+      // 表示側は profiles を読むので、編集画面もここを見る。
+      // user_metadata を読むと、保存した値と違うものが出る #31
+      getMyProfile().then((result) => {
+        // 遅い回線で、返る前に入力を始めていたら上書きしない。
+        // 入力中の文字が消えるのは、保存が壊れるより体験が悪い
+        if (cancelled || dirty.current) return;
+
+        if (result.status === 'error') {
+          // 「行が無い」と区別する。ここで Google の名前にフォールバックして
+          // 保存すると、ユーザーが付けた名前を上書きしてしまう
+          setLoadError(true);
+          return;
+        }
+        setDisplayName(
+          result.status === 'ok' && result.profile.display_name
+            ? result.profile.display_name
+            : (data.user.user_metadata?.full_name ?? ''),
+        );
+        setBio(result.status === 'ok' ? result.profile.bio : '');
+      });
     });
+
+    return () => { cancelled = true; };
   }, [router]);
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user || loadError) return;
     setSaving(true);
-    const supabase = createClient();
-    await supabase.auth.updateUser({
-      data: { full_name: displayName, bio },
-    });
+    setSaveError(null);
+
+    // auth.users.user_metadata に書いていたが、表示側は全て profiles を
+    // 読むため保存しても何も変わらなかった。しかも成功表示を出して前の
+    // 画面に戻るので、ユーザーは反映されない理由が分からない #31
+    const result = await updateMyProfile(displayName, bio);
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => { setSaved(false); router.back(); }, 800);
+
+    if (result === 'ok') {
+      setSaved(true);
+      setTimeout(() => { setSaved(false); router.back(); }, 800);
+    } else {
+      // 失敗しても戻っていたので、何も起きていないのに成功に見えていた
+      setSaveError(result);
+    }
   };
 
   return (
@@ -83,7 +119,7 @@ export default function ProfileEditPage() {
             <input
               type="text"
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => { dirty.current = true; setDisplayName(e.target.value); }}
               placeholder={t('profileEdit.namePlaceholder')}
               maxLength={30}
               className="w-full text-sm text-[var(--text-main)] focus:outline-none bg-transparent"
@@ -93,7 +129,7 @@ export default function ProfileEditPage() {
             <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">{t('profileEdit.bio')}</label>
             <textarea
               value={bio}
-              onChange={(e) => setBio(e.target.value)}
+              onChange={(e) => { dirty.current = true; setBio(e.target.value); }}
               placeholder={t('profileEdit.bioPlaceholder')}
               maxLength={150}
               rows={4}
@@ -112,10 +148,22 @@ export default function ProfileEditPage() {
           </div>
         </div>
 
+        {loadError && (
+          <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t('profileEdit.loadFailed')}
+          </p>
+        )}
+
+        {saveError && (
+          <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t(saveError === 'forbidden' ? 'profileEdit.forbidden' : 'profileEdit.failed')}
+          </p>
+        )}
+
         {/* Save button */}
         <CTAButton
           onClick={handleSave}
-          disabled={saving || saved || !displayName.trim()}
+          disabled={saving || saved || loadError || !displayName.trim()}
           className="w-full"
         >
           {saving ? (

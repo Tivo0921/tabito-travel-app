@@ -20,7 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { SectionHeader } from '@/components/section-header';
 import { PackageCard } from '@/components/package-card';
-import { getSavedPackages } from '@/lib/supabase/queries';
+import { getSavedPackages, getMyProfile } from '@/lib/supabase/queries';
 import { createClient } from '@/lib/supabase/client';
 import type { Package } from '@/lib/types';
 import type { User } from '@supabase/supabase-js';
@@ -43,6 +43,9 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabType>('saved');
   const [savedPackages, setSavedPackages] = useState<Package[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  // 表示名は profiles を読む。user_metadata は Google の値で、
+  // 編集画面の保存が反映されない #31
+  const [profileName, setProfileName] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -50,6 +53,9 @@ export default function ProfilePage() {
       setUser(data.user);
       if (data.user) {
         getSavedPackages().then(setSavedPackages);
+        getMyProfile().then((r) => {
+          if (r.status === 'ok' && r.profile.display_name) setProfileName(r.profile.display_name);
+        });
       }
     });
   }, []);
@@ -60,7 +66,9 @@ export default function ProfilePage() {
     router.push('/login');
   };
 
-  const displayName = user?.user_metadata?.full_name ?? user?.email ?? t('profile.guestUser');
+  // profiles を最優先。取れないときだけ Google の値に落とす
+  const displayName =
+    profileName ?? user?.user_metadata?.full_name ?? user?.email ?? t('profile.guestUser');
   const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
 
   return (
