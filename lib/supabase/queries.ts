@@ -1281,6 +1281,7 @@ export async function registerAsGuide(
   name: string,
   location: string,
   bio: string,
+  languages: string[],
 ): Promise<Guide | null> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -1297,6 +1298,11 @@ export async function registerAsGuide(
   location = location.trim();
   bio = bio.trim();
 
+  // 0個は誰にも案内できない状態になるので作らせない。
+  // updateMyGuideProfile 側にも同じ境界があり、片方だけ抜けていた
+  const normalizedLanguages = languages.filter(Boolean);
+  if (normalizedLanguages.length === 0) return null;
+
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
 
   const { data: guide, error: guideError } = await supabase
@@ -1304,7 +1310,8 @@ export async function registerAsGuide(
     .insert({
       user_id: user.id,
       location,
-      languages: ['ja', 'ko'],
+      // 以前は ['ja','ko'] 固定だった。登録時に選べるようにした #42
+      languages: normalizedLanguages,
       avatar_url: avatarUrl,
     })
     .select()
@@ -1373,6 +1380,8 @@ export interface GuideProfileInput {
   name: string;
   bio: string;
   location: string;
+  /** 案内できる言語。空配列は許さない（呼び出し側で1つ以上を保証する）#42 */
+  languages: string[];
 }
 
 /**
@@ -1398,9 +1407,14 @@ export async function updateMyGuideProfile(
   const bio = input.bio.trim();
   const location = input.location.trim();
 
+  // 0個は誰にも案内できない状態になるので保存しない。UI 側でも
+  // 最後の1つを外せないようにしているが、境界はここで決める
+  const languages = input.languages.filter(Boolean);
+  if (languages.length === 0) return 'error';
+
   const { data, error } = await supabase
     .from('guides')
-    .update({ location })
+    .update({ location, languages })
     .eq('user_id', user.id)
     .select('id');
 

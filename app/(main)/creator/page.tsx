@@ -30,6 +30,7 @@ import {
 } from '@/lib/supabase/queries';
 import type { Guide } from '@/lib/types';
 import { useT, useLocale } from '@/lib/i18n/provider';
+import { isLocale } from '@/lib/i18n/locales';
 import { formatPrice } from '@/lib/i18n/format';
 
 type CreatorPackage = {
@@ -56,12 +57,12 @@ export default function CreatorPage() {
   const [loading, setLoading] = useState(true);
 
   // 登録フォーム
-  const [draft, setDraft] = useState<GuideProfileDraft>({ name: '', location: '', bio: '' });
+  const [draft, setDraft] = useState<GuideProfileDraft>({ name: '', location: '', bio: '', languages: ['ja'] });
   const [registering, setRegistering] = useState(false);
 
   // プロフィール編集 #34
   const [editing, setEditing] = useState(false);
-  const [editDraft, setEditDraft] = useState<GuideProfileDraft>({ name: '', location: '', bio: '' });
+  const [editDraft, setEditDraft] = useState<GuideProfileDraft>({ name: '', location: '', bio: '', languages: ['ja'] });
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
 
@@ -107,7 +108,7 @@ export default function CreatorPage() {
     if (!draft.name.trim() || !draft.location.trim()) return;
     setRegistering(true);
     setRegisterError(false);
-    const g = await registerAsGuide(draft.name, draft.location, draft.bio);
+    const g = await registerAsGuide(draft.name, draft.location, draft.bio, draft.languages);
     if (g) {
       setGuide(g);
     } else {
@@ -122,7 +123,18 @@ export default function CreatorPage() {
     if (!guide) return;
     // 現在値を入れてから開く。空欄から始めると、直したい項目以外まで
     // 打ち直させることになる
-    setEditDraft({ name: guide.name, location: guide.location, bio: guide.bio });
+    // guides.languages には旧データとして表示名（['日本語','英語']）が
+    // 入っている行がある（#47）。そのまま渡すとどのトグルとも一致せず
+    // 全て未選択で開き、1つ押すと ['日本語','英語','ja'] と混ざってしまう。
+    // 「最後の1つは外させない」ガードがあるので手で消しきれない。
+    // 知らない値は落とし、保存すれば正規化される形にする。
+    const known = guide.languages.filter(isLocale);
+    setEditDraft({
+      name: guide.name,
+      location: guide.location,
+      bio: guide.bio,
+      languages: known.length > 0 ? known : ['ja'],
+    });
     setProfileError(null);
     setEditing(true);
   };

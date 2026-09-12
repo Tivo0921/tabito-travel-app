@@ -354,7 +354,7 @@ export const ko: Record<TranslationKey, string> = {
   // 프로필 편집
   'profileEdit.title': '프로필 편집',
   'profileEdit.avatar': '프로필 이미지',
-  'profileEdit.avatarHint': '탭하여 변경',
+  'profileEdit.avatarFromGoogle': 'Google 계정의 이미지를 표시하고 있습니다',
   'profileEdit.displayName': '표시 이름',
   'profileEdit.namePlaceholder': '이름을 입력하세요',
   'profileEdit.bio': '자기소개',
@@ -385,6 +385,8 @@ export const ko: Record<TranslationKey, string> = {
   'creator.register.areaPlaceholder': '예: 도쿄',
   'creator.register.bio': '자기소개',
   'creator.register.bioPlaceholder': '예: 도쿄 거주 7년차 한국인. 맛집과 골목 산책에 강합니다.',
+  'creator.register.languages': '안내 가능한 언어',
+  'creator.register.languagesHint': '여행자를 안내할 수 있는 언어를 선택해 주세요(1개 이상)',
   'creator.register.submit': '가이드 등록하기',
   'creator.reviewCount': '{count}건',
   'creator.stat.packages': '패키지',
