@@ -749,10 +749,12 @@ export type Database = {
           id: string
           item_type: string
           manner_tip_id: string | null
+          note: string | null
           package_id: string | null
           order: number
           plan_id: string
           scheduled_time: string | null
+          source: string
           spot_id: string | null
           title: string
         }
@@ -762,10 +764,12 @@ export type Database = {
           id?: string
           item_type: string
           manner_tip_id?: string | null
+          note?: string | null
           package_id?: string | null
           order: number
           plan_id: string
           scheduled_time?: string | null
+          source?: string
           spot_id?: string | null
           title: string
         }
@@ -775,10 +779,12 @@ export type Database = {
           id?: string
           item_type?: string
           manner_tip_id?: string | null
+          note?: string | null
           package_id?: string | null
           order?: number
           plan_id?: string
           scheduled_time?: string | null
+          source?: string
           spot_id?: string | null
           title?: string
         }
