@@ -148,6 +148,7 @@ export const ja = {
   'plan.item.lockedInPackage': 'パッケージの順番は変更できません',
   'plan.item.reorderFailed': '並び順を保存できませんでした。画面を再読み込みしてください',
   'plan.package.collapse': '折りたたむ',
+  'plan.package.collapseConfirm': '折りたたむと、このパッケージの行程に書いたメモは削除されます。続けますか？',
   'plan.item.duration': '所要時間（分）',
   'plan.item.durationPlaceholder': '例: 60',
   'plan.item.adding': '追加中...',

@@ -1092,6 +1092,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      reorder_plan_items: {
+        Args: { item_ids: string[] }
+        Returns: undefined
+      }
       get_chat_thread_summaries: {
         Args: never
         Returns: {

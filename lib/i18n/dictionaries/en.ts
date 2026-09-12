@@ -144,6 +144,7 @@ export const en: Record<TranslationKey, string> = {
   'plan.item.lockedInPackage': 'The order inside a package cannot be changed',
   'plan.item.reorderFailed': 'Could not save the new order. Please reload the page.',
   'plan.package.collapse': 'Collapse',
+  'plan.package.collapseConfirm': 'Collapsing will delete the notes you wrote on this package\u2019s stops. Continue?',
   'plan.item.duration': 'Duration (min)',
   'plan.item.durationPlaceholder': 'e.g. 60',
   'plan.item.adding': 'Adding...',

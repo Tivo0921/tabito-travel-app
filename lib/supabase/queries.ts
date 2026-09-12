@@ -1198,17 +1198,16 @@ export async function reorderPlanItems(orderedIds: string[]): Promise<boolean> {
   const supabase = createClient();
   if (orderedIds.length === 0) return true;
 
-  // PostgREST に複文トランザクションが無いので1件ずつ。順序の書き換えは
-  // 同じ日の中だけで完結し、失敗しても他の日に波及しない
-  for (let i = 0; i < orderedIds.length; i++) {
-    const { error } = await supabase
-      .from('plan_items')
-      .update({ order: i + 1 })
-      .eq('id', orderedIds[i]);
-    if (error) {
-      console.error('reorderPlanItems failed:', orderedIds[i], error.message);
-      return false;
-    }
+  // 1件ずつ UPDATE していたが、途中で失敗すると同じ日の中で並びが壊れ
+  //（前半は新しい order、後半は古いまま）、10件で10往復していた。
+  // 挿入・展開も内部でこれを呼ぶので、1操作が N+1 リクエストになっていた。
+  // RPC にまとめて1往復・1トランザクションにする。
+  // SECURITY INVOKER なので plan_items の RLS がそのまま効く。
+  const { error } = await supabase.rpc('reorder_plan_items', { item_ids: orderedIds });
+
+  if (error) {
+    console.error('reorderPlanItems failed:', error.code, error.message);
+    return false;
   }
   return true;
 }
@@ -1290,6 +1289,28 @@ export async function collapsePackageInPlan(
 ): Promise<PlanItem | null> {
   const supabase = createClient();
 
+  // 表示用のパッケージ情報を先に取る。これが無いと PackageBlock が
+  // 「パッケージが無い＝削除された」と判断して、消えていないのに
+  // 「配信を終了しました」を出してしまう。
+  // 行を書き換えたあとで失敗すると、DBは畳んだ状態なのに画面は展開のまま
+  // という食い違いが残るので、何も変更しないうちに失敗させる。
+  const { data: pkgRow, error: pkgError } = await supabase
+    .from('packages')
+    .select(`
+      id, image_url, spot_count, duration_minutes,
+      areas(name),
+      package_translations(title),
+      guides(guide_translations(name))
+    `)
+    .eq('id', packageId)
+    .eq('package_translations.language', DEFAULT_LANG)
+    .maybeSingle();
+
+  if (pkgError || !pkgRow) {
+    console.error('collapsePackageInPlan package fetch failed:', pkgError?.message ?? 'not found');
+    return null;
+  }
+
   const { data: rows, error } = await supabase
     .from('plan_items')
     .select('id, day, order, scheduled_time, duration_minutes')
@@ -1341,22 +1362,6 @@ export async function collapsePackageInPlan(
     // ブロックと展開行が二重に残る。呼び出し側が引き直せば実態が見える
   }
 
-  // 表示用のパッケージ情報を付けて返す。これが無いと PackageBlock が
-  // 「パッケージが無い＝削除された」と判断して、消えていないのに
-  // 「配信を終了しました」を出してしまう
-  const { data: pkgRow, error: pkgError } = await supabase
-    .from('packages')
-    .select(`
-      id, image_url, spot_count, duration_minutes,
-      areas(name),
-      package_translations(title),
-      guides(guide_translations(name))
-    `)
-    .eq('id', packageId)
-    .eq('package_translations.language', DEFAULT_LANG)
-    .maybeSingle();
-
-  if (pkgError) console.error('collapsePackageInPlan package fetch failed:', pkgError.message);
 
   return {
     id: block.id,
@@ -1372,7 +1377,7 @@ export async function collapsePackageInPlan(
     package_id: block.package_id,
     source: block.source as PlanItem['source'],
     note: block.note,
-    package: pkgRow ? planItemPackage(pkgRow) : undefined,
+    package: planItemPackage(pkgRow),
   } satisfies PlanItem;
 }
 
