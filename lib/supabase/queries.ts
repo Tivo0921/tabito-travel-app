@@ -1454,22 +1454,89 @@ export async function collapsePackageInPlan(
  * アイテムのメモを書き換える。
  * 「何を食べるか」「どの電車か」「何に気をつけるか」を残す欄。#16
  */
-export async function updatePlanItemNote(itemId: string, note: string): Promise<boolean> {
+/**
+ * AIの提案（並び順＋開始時刻）を反映する。
+ *
+ * 並びと時刻を別々に投げると、片方だけ通った時に画面とDBが食い違う。
+ * RPC で1トランザクションにまとめる。times は itemIds と同じ順・同じ個数、
+ * 時刻を決めない行は空文字を入れる。
+ */
+export async function applyPlanSchedule(
+  itemIds: string[],
+  times: string[],
+): Promise<boolean> {
   const supabase = createClient();
+  if (itemIds.length === 0) return true;
+  if (itemIds.length !== times.length) {
+    console.error('applyPlanSchedule: itemIds と times の個数が違う');
+    return false;
+  }
+
+  const { error } = await supabase.rpc('apply_plan_schedule', {
+    item_ids: itemIds,
+    times,
+  });
+
+  if (error) {
+    console.error('applyPlanSchedule failed:', error.code, error.message);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 予定の中身を編集する。タイトル・時刻・所要時間・メモ。
+ *
+ * 渡されたキーだけ更新する。時刻と所要時間は「消す」操作があるので、
+ * undefined（触らない）と null（空にする）を区別する。
+ */
+export async function updatePlanItem(
+  itemId: string,
+  fields: {
+    title?: string;
+    scheduled_time?: string | null;
+    duration_minutes?: number | null;
+    note?: string | null;
+  },
+): Promise<boolean> {
+  const supabase = createClient();
+
+  const patch: {
+    title?: string;
+    scheduled_time?: string | null;
+    duration_minutes?: number | null;
+    note?: string | null;
+  } = {};
+  if (fields.title !== undefined) {
+    const title = fields.title.trim();
+    // タイトルは NOT NULL。空で保存すると行が名無しになる
+    if (title === '') {
+      console.error('updatePlanItem: title が空');
+      return false;
+    }
+    patch.title = title;
+  }
+  if (fields.scheduled_time !== undefined) patch.scheduled_time = fields.scheduled_time || null;
+  if (fields.duration_minutes !== undefined) patch.duration_minutes = fields.duration_minutes;
+  if (fields.note !== undefined) patch.note = fields.note?.trim() || null;
+
+  if (Object.keys(patch).length === 0) return true;
+
   const { data, error } = await supabase
     .from('plan_items')
-    .update({ note: note.trim() || null })
+    .update(patch)
     .eq('id', itemId)
     .select('id');
 
   // RLS に弾かれると error ではなく0件で返る。0件を成功にすると
   // 「保存した」のに残っていない状態になる
   if (error || !data || data.length === 0) {
-    console.error('updatePlanItemNote failed:', error?.message ?? '0 rows affected');
+    console.error('updatePlanItem failed:', error?.message ?? '0 rows affected');
     return false;
   }
   return true;
 }
+
 
 export async function deletePlanItem(itemId: string): Promise<void> {
   const supabase = createClient();
