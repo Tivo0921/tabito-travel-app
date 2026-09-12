@@ -390,6 +390,8 @@ export const ja = {
   'profileEdit.email': 'メールアドレス',
   'profileEdit.emailNote': 'メールアドレスはサポートからのみ変更できます',
   'profileEdit.saved': '保存しました！',
+  'profileEdit.forbidden': '保存できませんでした。ログインし直してからお試しください',
+  'profileEdit.failed': '保存できませんでした。通信状況を確認して、もう一度お試しください',
   'profileEdit.save': '変更を保存',
 
   // マナーガイド

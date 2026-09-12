@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getMyProfile, updateMyProfile, type SaveResult } from '@/lib/supabase/queries';
 import { CTAButton } from '@/components/cta-button';
 import type { User } from '@supabase/supabase-js';
 import { useT } from '@/lib/i18n/provider';
@@ -18,28 +19,41 @@ export default function ProfileEditPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return; }
       setUser(data.user);
-      setDisplayName(data.user.user_metadata?.full_name ?? '');
-      setBio(data.user.user_metadata?.bio ?? '');
       setAvatarUrl(data.user.user_metadata?.avatar_url);
+      // 表示側は profiles を読むので、編集画面もここを見る。
+      // user_metadata を読むと、保存した値と違うものが出る #31
+      getMyProfile().then((p) => {
+        setDisplayName(p?.display_name ?? data.user.user_metadata?.full_name ?? '');
+        setBio(p?.bio ?? '');
+      });
     });
   }, [router]);
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const supabase = createClient();
-    await supabase.auth.updateUser({
-      data: { full_name: displayName, bio },
-    });
+    setSaveError(null);
+
+    // auth.users.user_metadata に書いていたが、表示側は全て profiles を
+    // 読むため保存しても何も変わらなかった。しかも成功表示を出して前の
+    // 画面に戻るので、ユーザーは反映されない理由が分からない #31
+    const result = await updateMyProfile(displayName, bio);
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => { setSaved(false); router.back(); }, 800);
+
+    if (result === 'ok') {
+      setSaved(true);
+      setTimeout(() => { setSaved(false); router.back(); }, 800);
+    } else {
+      // 失敗しても戻っていたので、何も起きていないのに成功に見えていた
+      setSaveError(result);
+    }
   };
 
   return (
@@ -111,6 +125,12 @@ export default function ProfileEditPage() {
             <p className="text-xs text-[var(--muted)] mt-0.5">{t('profileEdit.emailNote')}</p>
           </div>
         </div>
+
+        {saveError && (
+          <p role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
+            {t(saveError === 'forbidden' ? 'profileEdit.forbidden' : 'profileEdit.failed')}
+          </p>
+        )}
 
         {/* Save button */}
         <CTAButton

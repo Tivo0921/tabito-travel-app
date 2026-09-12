@@ -386,6 +386,8 @@ export const ko: Record<TranslationKey, string> = {
   'profileEdit.email': '이메일 주소',
   'profileEdit.emailNote': '이메일 주소는 지원팀을 통해서만 변경할 수 있습니다',
   'profileEdit.saved': '저장했습니다!',
+  'profileEdit.forbidden': '저장하지 못했습니다. 다시 로그인한 후 시도해 주세요',
+  'profileEdit.failed': '저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
   'profileEdit.save': '변경 사항 저장',
 
   // 매너 가이드

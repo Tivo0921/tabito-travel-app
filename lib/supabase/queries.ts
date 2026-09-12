@@ -801,6 +801,64 @@ function planItemPackage(row: {
   } satisfies PlanItemPackage;
 }
 
+/**
+ * 自分のプロフィール（表示名・自己紹介）を取る。#31
+ * 表示側は profiles を読むので、編集画面もここを見る。
+ */
+export async function getMyProfile(): Promise<{ display_name: string; bio: string } | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('display_name, bio')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('getMyProfile error:', error.message);
+    return null;
+  }
+  if (!data) return null;
+  return { display_name: data.display_name ?? '', bio: data.bio ?? '' };
+}
+
+/**
+ * プロフィールを保存する。#31
+ *
+ * これまで auth.users.user_metadata に書いていたが、表示側は全て
+ * profiles を読むため、保存しても何も変わらなかった。書き込み先を
+ * 読み取り先に合わせる。
+ *
+ * RLS に弾かれた UPDATE は error ではなく0件で返るので、.select() で
+ * 確認しないと「保存できた」ことになってしまう。
+ */
+export async function updateMyProfile(
+  displayName: string,
+  bio: string,
+): Promise<SaveResult> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 'forbidden';
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ display_name: displayName.trim(), bio: bio.trim() || null })
+    .eq('id', user.id)
+    .select('id');
+
+  if (error) {
+    console.error('updateMyProfile failed:', error.message);
+    return 'error';
+  }
+  if (!data || data.length === 0) {
+    console.error('updateMyProfile failed: 0 rows affected');
+    return 'forbidden';
+  }
+  return 'ok';
+}
+
 export async function getMyPlans(): Promise<Plan[]> {
   const supabase = createClient();
   const { data, error } = await supabase

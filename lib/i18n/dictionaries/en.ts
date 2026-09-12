@@ -386,6 +386,8 @@ export const en: Record<TranslationKey, string> = {
   'profileEdit.email': 'Email address',
   'profileEdit.emailNote': 'Your email can only be changed by support',
   'profileEdit.saved': 'Saved!',
+  'profileEdit.forbidden': 'Could not save. Please sign in again and try once more.',
+  'profileEdit.failed': 'Could not save. Check your connection and try again.',
   'profileEdit.save': 'Save changes',
 
   // Etiquette guide
