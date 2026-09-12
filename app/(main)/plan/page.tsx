@@ -23,6 +23,7 @@ import {
   Lightbulb,
   CheckCircle2,
   ArrowUpDown,
+  Pencil,
 } from 'lucide-react';
 import {
   DndContext,
@@ -47,8 +48,9 @@ import {
   getPlanItems,
   addPlanItem,
   insertPlanItemAt,
-  updatePlanItemNote,
   reorderPlanItems,
+  applyPlanSchedule,
+  updatePlanItem,
   deletePlanItem,
   getPurchasedPackagesForPlan,
   addPlanPackage,
@@ -65,6 +67,10 @@ const ITEM_TYPES: { value: PlanItem['item_type']; labelKey: TranslationKey; icon
   { value: 'meal', labelKey: 'plan.itemType.meal', icon: '🍜' },
   { value: 'transport', labelKey: 'plan.itemType.transport', icon: '✈️' },
   { value: 'manner', labelKey: 'plan.itemType.manner', icon: '📝' },
+  { value: 'lodging', labelKey: 'plan.itemType.lodging', icon: '🏨' },
+  { value: 'shopping', labelKey: 'plan.itemType.shopping', icon: '🛍️' },
+  { value: 'activity', labelKey: 'plan.itemType.activity', icon: '🎨' },
+  { value: 'other', labelKey: 'plan.itemType.other', icon: '📌' },
 ];
 
 /**
@@ -114,7 +120,7 @@ type PlanAdvice = {
   concerns: string[];
   suggestions: string[];
   checks: string[];
-  reorder: { day: number; itemIds: string[]; reason: string } | null;
+  schedule: { day: number; itemIds: string[]; times: string[]; reason: string } | null;
 };
 
 function timeRange(scheduled: string | null, durationMinutes: number | null): string | null {
@@ -130,6 +136,16 @@ function timeRange(scheduled: string | null, durationMinutes: number | null): st
 
 function typeIcon(type: string) {
   return ITEM_TYPES.find((t) => t.value === type)?.icon ?? '📍';
+}
+
+/**
+ * タイトルを直してよい行か。
+ *
+ * パッケージ由来の行の名前を変えると、パッケージの中身を見たときと
+ * 食い違う。順番を固定しているのと同じ理由で、名前も固定する。
+ */
+function canEditTitle(item: PlanItem): boolean {
+  return item.source !== 'package' && item.item_type !== 'package';
 }
 
 function getDayCount(plan: Plan): number {
@@ -265,9 +281,11 @@ export default function PlanPage() {
   const [newItemNote, setNewItemNote] = useState('');
   const [insertAt, setInsertAt] = useState<number | null>(null);
   // 既存アイテムのメモ編集
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [noteDraft, setNoteDraft] = useState('');
-  const [savingNote, setSavingNote] = useState(false);
+  // 予定の編集。メモだけでなくタイトル・時刻・所要時間も直せる #16
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({ title: '', time: '', duration: '', note: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editFailed, setEditFailed] = useState(false);
   const [reorderError, setReorderError] = useState(false);
   const [splitWarning, setSplitWarning] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
@@ -416,14 +434,65 @@ export default function PlanPage() {
     setAddingItem(false);
   };
 
-  const handleSaveNote = async (itemId: string) => {
-    setSavingNote(true);
-    const ok = await updatePlanItemNote(itemId, noteDraft);
-    if (ok) {
-      setPlanItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, note: noteDraft.trim() || null } : i)));
-      setEditingNoteId(null);
+  /** 編集パネルを今の値で開く */
+  const openEditor = (item: PlanItem) => {
+    setEditFailed(false);
+    setEditDraft({
+      title: item.title,
+      time: item.scheduled_time?.slice(0, 5) ?? '',
+      duration: item.duration_minutes != null ? String(item.duration_minutes) : '',
+      note: item.note ?? '',
+    });
+    setEditingId(item.id);
+  };
+
+  const handleSaveEdit = async (item: PlanItem) => {
+    const title = editDraft.title.trim();
+    // タイトルは NOT NULL。空のまま保存させると行が名無しになる
+    if (canEditTitle(item) && title === '') {
+      setEditFailed(true);
+      return;
     }
-    setSavingNote(false);
+
+    const durationRaw = editDraft.duration.trim();
+    const duration = durationRaw === '' ? null : Number(durationRaw);
+    if (duration !== null && (!Number.isFinite(duration) || duration < 0)) {
+      setEditFailed(true);
+      return;
+    }
+
+    setSavingEdit(true);
+    setEditFailed(false);
+
+    const note = editDraft.note.trim() || null;
+    const scheduled_time = editDraft.time ? `${editDraft.time}:00` : null;
+    const ok = await updatePlanItem(item.id, {
+      // パッケージ由来のタイトルはパッケージの中身と揃えたいので送らない
+      ...(canEditTitle(item) ? { title } : {}),
+      scheduled_time,
+      duration_minutes: duration,
+      note,
+    });
+
+    if (ok) {
+      setPlanItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id
+            ? {
+                ...i,
+                ...(canEditTitle(item) ? { title } : {}),
+                scheduled_time,
+                duration_minutes: duration,
+                note,
+              }
+            : i,
+        ),
+      );
+      setEditingId(null);
+    } else {
+      setEditFailed(true);
+    }
+    setSavingEdit(false);
   };
 
   const handleCollapsePackage = async (packageId: string, title: string) => {
@@ -570,7 +639,7 @@ export default function PlanPage() {
       if (!res.ok) { setAiError('failed'); return; }
       const data = (await res.json()) as PlanAdvice;
       const hasContent =
-        data.concerns?.length || data.suggestions?.length || data.checks?.length || data.reorder;
+        data.concerns?.length || data.suggestions?.length || data.checks?.length || data.schedule;
       if (hasContent) setAdvice(data);
       else setAiError('failed');
     } catch {
@@ -580,24 +649,36 @@ export default function PlanPage() {
     }
   };
 
-  const handleApplyReorder = async () => {
-    if (!advice?.reorder) return;
-    const { day, itemIds } = advice.reorder;
+  const handleApplySchedule = async () => {
+    if (!advice?.schedule) return;
+    const { day, itemIds, times } = advice.schedule;
     setApplyingReorder(true);
 
-    // 提案どおりに並べ替える。サーバ側で「IDの過不足が無い」「パッケージの
-    // 塊が分断されていない」を検証済みなので、ここでは並べるだけ
+    // 提案どおりに並べ替え、時刻も入れる。サーバ側で「IDの過不足が無い」
+    //「パッケージの塊が分断されていない」「時刻が巻き戻らない」を
+    // 検証済みなので、ここでは当てはめるだけ
     const byId = new Map(planItems.map((i) => [i.id, i]));
-    const reordered = itemIds
-      .map((id) => byId.get(id))
-      .filter((i): i is PlanItem => Boolean(i))
-      .map((it, idx) => ({ ...it, order: idx + 1 }));
+    const applied = itemIds
+      .map((id, idx) => {
+        const it = byId.get(id);
+        if (!it) return null;
+        return {
+          ...it,
+          order: idx + 1,
+          scheduled_time: times[idx] ? `${times[idx]}:00` : null,
+        };
+      })
+      .filter((i): i is PlanItem => Boolean(i));
 
-    setPlanItems((prev) => [...prev.filter((i) => i.day !== day), ...reordered]);
-    const ok = await reorderPlanItems(reordered.map((i) => i.id));
+    setPlanItems((prev) => [...prev.filter((i) => i.day !== day), ...applied]);
+    const ok = await applyPlanSchedule(
+      applied.map((i) => i.id),
+      // DBに渡すのは "HH:MM"。空文字は「時刻なし」として扱われる
+      applied.map((i) => i.scheduled_time?.slice(0, 5) ?? ''),
+    );
     if (!ok) setReorderError(true);
     // 適用済みの提案は消す。残すと何度も押せてしまう
-    setAdvice((prev) => (prev ? { ...prev, reorder: null } : prev));
+    setAdvice((prev) => (prev ? { ...prev, schedule: null } : prev));
     setReorderApplied(true);
     setApplyingReorder(false);
   };
@@ -694,25 +775,36 @@ export default function PlanPage() {
                 tone="muted"
               />
 
-              {advice.reorder && (
+              {advice.schedule && (
                 <div className="p-4 bg-white rounded-xl border border-[var(--primary)]/30">
                   <div className="flex items-center gap-1.5 mb-2">
                     <ArrowUpDown className="w-4 h-4 text-[var(--primary)]" />
                     <span className="text-xs font-semibold text-[var(--primary)]">
-                      {t('plan.ai.reorderTitle', { day: advice.reorder.day })}
+                      {t('plan.ai.scheduleTitle', { day: advice.schedule.day })}
                     </span>
                   </div>
-                  <p className="text-sm text-[var(--text-main)] mb-3">{advice.reorder.reason}</p>
+                  <p className="text-sm text-[var(--text-main)] mb-3">{advice.schedule.reason}</p>
 
-                  {/* 適用前に何がどう変わるか見せる。承認してから書き換える */}
+                  {/* 適用前に何がどう変わるか見せる。承認してから書き換える。
+                      時刻が変わる行は、今の時刻と並べて出す */}
                   <ol className="space-y-1">
-                    {advice.reorder.itemIds.map((id, i) => {
+                    {advice.schedule.itemIds.map((id, i) => {
                       const it = planItems.find((x) => x.id === id);
                       if (!it) return null;
+                      const now = it.scheduled_time?.slice(0, 5) ?? '';
+                      const next = advice.schedule!.times[i] ?? '';
                       return (
                         <li key={id} className="text-xs text-[var(--text-sub)] flex gap-2">
                           <span className="text-[var(--muted)] flex-shrink-0">{i + 1}.</span>
+                          <span className="flex-shrink-0 font-medium text-[var(--primary)] tabular-nums">
+                            {next || '—'}
+                          </span>
                           <span className="truncate">{it.title}</span>
+                          {now && next && now !== next && (
+                            <span className="flex-shrink-0 text-[var(--muted)] line-through tabular-nums">
+                              {now}
+                            </span>
+                          )}
                         </li>
                       );
                     })}
@@ -726,17 +818,21 @@ export default function PlanPage() {
                 </p>
               )}
 
+              {/* 並べ替えの提案が無いときは、その旨を出す。ボタンが
+                  出ないだけだと「壊れている」と思われる */}
+              {!advice.schedule && !reorderApplied && (
+                <p className="px-1 text-xs text-[var(--muted)]">{t('plan.ai.noReorder')}</p>
+              )}
+
               {/* 読んだあとに何ができるかを出す。提案は承認したときだけ反映する */}
               <div className="flex flex-wrap gap-2">
-                {advice.reorder && (
-                  <button
-                    onClick={handleApplyReorder}
-                    disabled={applyingReorder}
-                    className="flex-1 min-w-[140px] py-2.5 px-3 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                  >
-                    {t(applyingReorder ? 'plan.ai.applying' : 'plan.ai.accept')}
-                  </button>
-                )}
+                <button
+                  onClick={handleApplySchedule}
+                  disabled={!advice.schedule || applyingReorder}
+                  className="flex-1 min-w-[140px] py-2.5 px-3 bg-[var(--primary)] text-white rounded-lg text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {t(applyingReorder ? 'plan.ai.applying' : 'plan.ai.accept')}
+                </button>
                 <button
                   onClick={handleAskAgain}
                   disabled={applyingReorder}
@@ -960,29 +1056,85 @@ export default function PlanPage() {
                             </p>
                           )}
 
-                          {/* メモ。何を食べるか・どの電車か・注意点を残す欄 #16 */}
-                          {editingNoteId === item.id ? (
+                          {/* タイトル・時刻・所要時間・メモをまとめて直す。
+                              メモしか直せないと、時間を1本ずらすだけで
+                              作り直しになってしまう #16 */}
+                          {editingId === item.id ? (
                             <div className="mt-2 space-y-2">
+                              {canEditTitle(item) ? (
+                                <input
+                                  type="text"
+                                  value={editDraft.title}
+                                  onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))}
+                                  placeholder={t('plan.item.titlePlaceholder')}
+                                  maxLength={120}
+                                  disabled={savingEdit}
+                                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--primary)] disabled:opacity-60"
+                                />
+                              ) : (
+                                <p className="text-xs text-[var(--muted)]">
+                                  {t('plan.item.titleLockedInPackage')}
+                                </p>
+                              )}
+
+                              <div className="flex gap-2">
+                                <label className="flex-1">
+                                  <span className="block text-xs text-[var(--muted)] mb-1">
+                                    {t('plan.item.time')}
+                                  </span>
+                                  <input
+                                    type="time"
+                                    value={editDraft.time}
+                                    onChange={(e) => setEditDraft((d) => ({ ...d, time: e.target.value }))}
+                                    disabled={savingEdit}
+                                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] disabled:opacity-60"
+                                  />
+                                </label>
+                                <label className="flex-1">
+                                  <span className="block text-xs text-[var(--muted)] mb-1">
+                                    {t('plan.item.duration')}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    max={1440}
+                                    value={editDraft.duration}
+                                    onChange={(e) => setEditDraft((d) => ({ ...d, duration: e.target.value }))}
+                                    placeholder={t('plan.item.durationPlaceholder')}
+                                    disabled={savingEdit}
+                                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] disabled:opacity-60"
+                                  />
+                                </label>
+                              </div>
+
                               <textarea
-                                value={noteDraft}
-                                onChange={(e) => setNoteDraft(e.target.value)}
+                                value={editDraft.note}
+                                onChange={(e) => setEditDraft((d) => ({ ...d, note: e.target.value }))}
                                 placeholder={t('plan.item.notePlaceholder')}
                                 rows={2}
                                 maxLength={500}
-                                disabled={savingNote}
+                                disabled={savingEdit}
                                 className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)] resize-none disabled:opacity-60"
                               />
+
+                              {editFailed && (
+                                <p role="alert" className="text-xs text-red-500">
+                                  {t('plan.item.saveFailed')}
+                                </p>
+                              )}
+
                               <div className="flex gap-2">
                                 <button
-                                  onClick={() => setEditingNoteId(null)}
-                                  disabled={savingNote}
+                                  onClick={() => { setEditingId(null); setEditFailed(false); }}
+                                  disabled={savingEdit}
                                   className="px-3 py-1.5 border border-[var(--border)] rounded-lg text-xs disabled:opacity-50"
                                 >
                                   {t('common.cancel')}
                                 </button>
                                 <button
-                                  onClick={() => handleSaveNote(item.id)}
-                                  disabled={savingNote}
+                                  onClick={() => handleSaveEdit(item)}
+                                  disabled={savingEdit}
                                   className="px-3 py-1.5 bg-[var(--primary)] text-white rounded-lg text-xs font-medium disabled:opacity-50"
                                 >
                                   {t('common.save')}
@@ -991,7 +1143,7 @@ export default function PlanPage() {
                             </div>
                           ) : item.note ? (
                             <button
-                              onClick={() => { setNoteDraft(item.note ?? ''); setEditingNoteId(item.id); }}
+                              onClick={() => openEditor(item)}
                               className="mt-1.5 w-full text-left flex items-start gap-1.5 text-sm text-[var(--text-sub)] hover:text-[var(--text-main)] transition-colors"
                             >
                               <StickyNote className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-[var(--muted)]" />
@@ -999,7 +1151,7 @@ export default function PlanPage() {
                             </button>
                           ) : (
                             <button
-                              onClick={() => { setNoteDraft(''); setEditingNoteId(item.id); }}
+                              onClick={() => openEditor(item)}
                               className="mt-1.5 flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--primary)] transition-colors"
                             >
                               <StickyNote className="w-3 h-3" />
@@ -1007,6 +1159,16 @@ export default function PlanPage() {
                             </button>
                           )}
                         </div>
+
+                        {/* 時刻やタイトルを直す導線。メモが無い行だと
+                            編集に入る入口が見つからなかった */}
+                        <button
+                          onClick={() => (editingId === item.id ? setEditingId(null) : openEditor(item))}
+                          aria-label={t('plan.item.editTitle')}
+                          className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors self-start flex-shrink-0"
+                        >
+                          <Pencil className="w-4 h-4 text-[var(--muted)]" />
+                        </button>
 
                         <button
                           onClick={() => handleDeleteItem(item.id)}

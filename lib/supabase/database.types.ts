@@ -344,7 +344,7 @@ export type Database = {
           {
             foreignKeyName: "guides_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -750,8 +750,8 @@ export type Database = {
           item_type: string
           manner_tip_id: string | null
           note: string | null
-          package_id: string | null
           order: number
+          package_id: string | null
           plan_id: string
           scheduled_time: string | null
           source: string
@@ -765,8 +765,8 @@ export type Database = {
           item_type: string
           manner_tip_id?: string | null
           note?: string | null
-          package_id?: string | null
           order: number
+          package_id?: string | null
           plan_id: string
           scheduled_time?: string | null
           source?: string
@@ -780,8 +780,8 @@ export type Database = {
           item_type?: string
           manner_tip_id?: string | null
           note?: string | null
-          package_id?: string | null
           order?: number
+          package_id?: string | null
           plan_id?: string
           scheduled_time?: string | null
           source?: string
@@ -794,6 +794,13 @@ export type Database = {
             columns: ["manner_tip_id"]
             isOneToOne: false
             referencedRelation: "manner_tips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "packages"
             referencedColumns: ["id"]
           },
           {
@@ -1092,8 +1099,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      reorder_plan_items: {
-        Args: { item_ids: string[] }
+      apply_plan_schedule: {
+        Args: { item_ids: string[]; times: string[] }
         Returns: undefined
       }
       get_chat_thread_summaries: {
@@ -1109,6 +1116,15 @@ export type Database = {
         Args: { target_thread_id: string }
         Returns: undefined
       }
+      recalc_guide_rating: {
+        Args: { target_guide_id: string }
+        Returns: undefined
+      }
+      recalc_package_rating: {
+        Args: { target_package_id: string }
+        Returns: undefined
+      }
+      reorder_plan_items: { Args: { item_ids: string[] }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
@@ -1127,12 +1143,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1156,11 +1172,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1181,11 +1197,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1206,11 +1222,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1223,11 +1239,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

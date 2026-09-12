@@ -55,11 +55,16 @@ const SYSTEM_PROMPT = `あなたは日本旅行のコンシェルジュです。
 - 指摘は具体的に。「余裕がない」ではなく「10:00の次が10:15で移動時間がない」と書く
 - 該当が無い項目は空配列にする。無理に埋めない
 
-reorder について:
-- 順番を変えたほうがよいと判断したときだけ返す。不要なら null
-- 同じ日の中でのみ並べ替える。日をまたがない
+schedule について（順番と開始時刻の提案）:
+- 順番または時刻を直したほうがよいときに返す。直すところが無ければ null
+- 同じ日の中だけを扱う。日をまたがない
 - **与えられたIDを過不足なく全て含める。** 追加も削除もしない
 - [package] の行が連続している塊は、順番を崩さず塊のまま動かす
+- times は itemIds と同じ順・同じ個数。"HH:MM"（24時間表記）で入れる
+- 時刻が空欄の行には、移動と所要時間から見て無理のない時刻を入れてよい
+- 時刻は目安。営業時間の実データは無いので、reason で断定しない
+- 時刻は上から順に前後しないようにする。決めきれない行だけ "" にする
+- 「順番はそのままで時刻だけ入れる」も有効な提案。並べ替えを無理に作らない
 - reason は1文、40文字以内`;
 
 type PlanItemRow = {
@@ -103,25 +108,29 @@ function renderItinerary(
   return lines.join('\n');
 }
 
-type Reorder = { day: number; itemIds: string[]; reason: string };
+type Schedule = { day: number; itemIds: string[]; times: string[]; reason: string };
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
- * AI が返した並べ替えを受け入れてよいか検証する。
+ * AI が返した並べ替え・時刻を受け入れてよいか検証する。
  *
- * モデルの出力をそのまま流すと、行を落としたり増やしたりしうる。
- * 承認前にプレビューを見せる作りではあるが、**壊れた提案はそもそも
- * 見せない**。以下を満たさないものは捨てる。
+ * モデルの出力をそのまま流すと、行を落としたり増やしたり、
+ * 時刻を巻き戻したりしうる。承認前にプレビューを見せる作りではあるが、
+ * **壊れた提案はそもそも見せない**。以下を満たさないものは捨てる。
  *
  *  1. その日のIDと過不足なく一致する（追加も削除もしていない）
- *  2. 同じパッケージ由来の行が連続している（手動ドラッグと同じ規則）
- *  3. 今の並びと違う（同じなら提案する意味がない）
+ *  2. times が itemIds と同数で、"HH:MM" か空文字
+ *  3. 時刻が上から順に前後しない
+ *  4. 同じパッケージ由来の行が連続している（手動ドラッグと同じ規則）
+ *  5. 今の並び・時刻のどちらかが変わっている（同じなら提案する意味がない）
  */
-function validateReorder(reorder: Reorder, items: PlanItemRow[]): Reorder | null {
-  const dayItems = items.filter((i) => i.day === reorder.day).sort((a, b) => a.order - b.order);
+function validateSchedule(schedule: Schedule, items: PlanItemRow[]): Schedule | null {
+  const dayItems = items.filter((i) => i.day === schedule.day).sort((a, b) => a.order - b.order);
   if (dayItems.length === 0) return null;
 
   const current = dayItems.map((i) => i.id);
-  const proposed = reorder.itemIds;
+  const proposed = schedule.itemIds;
 
   // 1. 集合として一致するか
   if (proposed.length !== current.length) return null;
@@ -129,7 +138,18 @@ function validateReorder(reorder: Reorder, items: PlanItemRow[]): Reorder | null
   const known = new Set(current);
   if (!proposed.every((id) => known.has(id))) return null;
 
-  // 2. 同じパッケージ由来の行が連続しているか
+  // 2. 時刻の形
+  const times = schedule.times;
+  if (times.length !== proposed.length) return null;
+  if (!times.every((v) => v === '' || HHMM.test(v))) return null;
+
+  // 3. 時刻が巻き戻っていないか。空欄は判定から外す
+  const filled = times.filter((v) => v !== '');
+  for (let i = 1; i < filled.length; i++) {
+    if (filled[i] < filled[i - 1]) return null;
+  }
+
+  // 4. 同じパッケージ由来の行が連続しているか
   const byId = new Map(dayItems.map((i) => [i.id, i]));
   const runs = new Map<string, number[]>();
   proposed.forEach((id, idx) => {
@@ -142,10 +162,14 @@ function validateReorder(reorder: Reorder, items: PlanItemRow[]): Reorder | null
     if (idx[idx.length - 1] - idx[0] !== idx.length - 1) return null;
   }
 
-  // 3. 今と同じなら返さない
-  if (proposed.every((id, i) => id === current[i])) return null;
+  // 5. 並びも時刻も今と同じなら返さない
+  const sameOrder = proposed.every((id, i) => id === current[i]);
+  const sameTimes = proposed.every(
+    (id, i) => (byId.get(id)?.scheduled_time?.slice(0, 5) ?? '') === times[i],
+  );
+  if (sameOrder && sameTimes) return null;
 
-  return { day: reorder.day, itemIds: proposed, reason: reorder.reason };
+  return { day: schedule.day, itemIds: proposed, times, reason: schedule.reason };
 }
 
 export async function POST(req: NextRequest) {
@@ -233,18 +257,20 @@ export async function POST(req: NextRequest) {
             schema: {
               type: 'object',
               additionalProperties: false,
-              required: ['concerns', 'suggestions', 'checks', 'reorder'],
+              required: ['concerns', 'suggestions', 'checks', 'schedule'],
               properties: {
                 concerns: { type: 'array', items: { type: 'string' } },
                 suggestions: { type: 'array', items: { type: 'string' } },
                 checks: { type: 'array', items: { type: 'string' } },
-                reorder: {
+                schedule: {
                   type: ['object', 'null'],
                   additionalProperties: false,
-                  required: ['day', 'itemIds', 'reason'],
+                  required: ['day', 'itemIds', 'times', 'reason'],
                   properties: {
                     day: { type: 'integer' },
                     itemIds: { type: 'array', items: { type: 'string' } },
+                    // itemIds と同じ順・同じ個数。"HH:MM"、決めないなら ""
+                    times: { type: 'array', items: { type: 'string' } },
                     reason: { type: 'string' },
                   },
                 },
@@ -282,7 +308,7 @@ export async function POST(req: NextRequest) {
   }
 
   let parsed: {
-    concerns?: unknown; suggestions?: unknown; checks?: unknown; reorder?: unknown;
+    concerns?: unknown; suggestions?: unknown; checks?: unknown; schedule?: unknown;
   } | null = null;
   try {
     parsed = JSON.parse(text);
@@ -294,17 +320,22 @@ export async function POST(req: NextRequest) {
   const asLines = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim() !== '') : [];
 
-  // reorder はモデルの出力なので、通す前に必ず検証する
-  let reorder: Reorder | null = null;
-  const r = parsed?.reorder;
+  // schedule はモデルの出力なので、通す前に必ず検証する
+  let schedule: Schedule | null = null;
+  const r = parsed?.schedule;
   if (r && typeof r === 'object') {
-    const cand = r as Partial<Reorder>;
-    if (typeof cand.day === 'number' && Array.isArray(cand.itemIds)) {
-      reorder = validateReorder(
-        { day: cand.day, itemIds: cand.itemIds as string[], reason: String(cand.reason ?? '') },
+    const cand = r as Partial<Schedule>;
+    if (typeof cand.day === 'number' && Array.isArray(cand.itemIds) && Array.isArray(cand.times)) {
+      schedule = validateSchedule(
+        {
+          day: cand.day,
+          itemIds: cand.itemIds as string[],
+          times: (cand.times as unknown[]).map((v) => (typeof v === 'string' ? v.trim() : '')),
+          reason: String(cand.reason ?? ''),
+        },
         usedItems,
       );
-      if (!reorder) console.warn('plan/advise: reorder rejected by validation');
+      if (!schedule) console.warn('plan/advise: schedule rejected by validation');
     }
   }
 
@@ -312,6 +343,6 @@ export async function POST(req: NextRequest) {
     concerns: asLines(parsed?.concerns),
     suggestions: asLines(parsed?.suggestions),
     checks: asLines(parsed?.checks),
-    reorder,
+    schedule,
   });
 }
