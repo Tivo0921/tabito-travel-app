@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { ChevronLeft, Loader2 } from 'lucide-react';
@@ -21,9 +21,12 @@ export default function ProfileEditPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<Exclude<SaveResult, 'ok'> | null>(null);
   const [loadError, setLoadError] = useState(false);
+  // 読み込みより先に入力を始めたか。fetch が返ってから setState すると
+  // 打ち込んだ文字が消える。unmount 用の cancelled では防げない
+  const dirty = useRef(false);
 
   useEffect(() => {
-    // 入力を始めたあとに fetch が返っても上書きしないためのフラグ
+    // 画面を離れたあとに setState しないためのフラグ
     let cancelled = false;
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
@@ -35,7 +38,7 @@ export default function ProfileEditPage() {
       getMyProfile().then((result) => {
         // 遅い回線で、返る前に入力を始めていたら上書きしない。
         // 入力中の文字が消えるのは、保存が壊れるより体験が悪い
-        if (cancelled) return;
+        if (cancelled || dirty.current) return;
 
         if (result.status === 'error') {
           // 「行が無い」と区別する。ここで Google の名前にフォールバックして
@@ -116,7 +119,7 @@ export default function ProfileEditPage() {
             <input
               type="text"
               value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              onChange={(e) => { dirty.current = true; setDisplayName(e.target.value); }}
               placeholder={t('profileEdit.namePlaceholder')}
               maxLength={30}
               className="w-full text-sm text-[var(--text-main)] focus:outline-none bg-transparent"
@@ -126,7 +129,7 @@ export default function ProfileEditPage() {
             <label className="block text-xs font-semibold text-[var(--muted)] mb-1.5">{t('profileEdit.bio')}</label>
             <textarea
               value={bio}
-              onChange={(e) => setBio(e.target.value)}
+              onChange={(e) => { dirty.current = true; setBio(e.target.value); }}
               placeholder={t('profileEdit.bioPlaceholder')}
               maxLength={150}
               rows={4}
