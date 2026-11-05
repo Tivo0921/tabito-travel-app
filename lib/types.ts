@@ -171,7 +171,16 @@ export interface PlanItem {
   plan_id: string;
   day: number;
   order: number;
-  item_type: 'spot' | 'meal' | 'transport' | 'manner' | 'package';
+  item_type:
+    | 'spot'
+    | 'meal'
+    | 'transport'
+    | 'manner'
+    | 'package'
+    | 'lodging'
+    | 'shopping'
+    | 'activity'
+    | 'other';
   title: string;
   scheduled_time: string | null;
   duration_minutes: number | null;
