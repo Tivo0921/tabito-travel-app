@@ -1663,38 +1663,6 @@ export async function hasPurchased(packageId: string): Promise<boolean> {
   return !!data;
 }
 
-export async function purchasePackage(packageId: string, amount: number): Promise<Purchase | null> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data, error } = await supabase
-    .from('purchases')
-    .insert({
-      user_id: user.id,
-      package_id: packageId,
-      amount,
-      currency: 'JPY',
-      status: 'completed',
-    })
-    .select()
-    .single();
-
-  if (error || !data) {
-    console.error('purchasePackage error:', error);
-    return null;
-  }
-
-  return {
-    id: data.id,
-    package_id: data.package_id,
-    amount: data.amount,
-    currency: data.currency,
-    status: data.status as Purchase['status'],
-    purchased_at: data.purchased_at,
-  } satisfies Purchase;
-}
-
 // ────────────────────────────────────────────────
 // Creator (ガイド側コンテンツ管理)
 // ────────────────────────────────────────────────
