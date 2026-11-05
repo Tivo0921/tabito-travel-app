@@ -1,0 +1,45 @@
+name: Supabase keepalive
+
+# Supabase の Free プランは、7日間アクセスが無いとプロジェクトを一時停止する。
+# 本番・stg の両方に毎日1回、anon キーで REST API から1行読むリクエストを送って停止を防ぐ。
+# 応答が 200 以外（停止済み・キー失効など）ならジョブを失敗させ、GitHub の失敗通知で気づけるようにする。
+#
+# 必要な Secret: SUPABASE_PROD_ANON_KEY / SUPABASE_STG_ANON_KEY（各プロジェクトの anon キー）
+# 注意: GitHub は公開リポジトリで60日間コミット等の動きが無いと schedule を自動で無効にする。
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 毎日 09:00 JST
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: production
+            ref: toyzerxkavsgomcbgujj
+            key_secret: SUPABASE_PROD_ANON_KEY
+          - env: staging
+            ref: oqtvjmongyuyaoqckdyy
+            key_secret: SUPABASE_STG_ANON_KEY
+    steps:
+      - name: Ping ${{ matrix.env }}
+        env:
+          ANON_KEY: ${{ secrets[matrix.key_secret] }}
+          URL: https://${{ matrix.ref }}.supabase.co/rest/v1/packages?select=id&limit=1
+        run: |
+          if [ -z "$ANON_KEY" ]; then echo "::error::secret ${{ matrix.key_secret }} が未設定"; exit 1; fi
+          for i in 1 2 3; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$URL" -H "apikey: $ANON_KEY") || code=000
+            echo "attempt $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "::error::${{ matrix.env }} (${{ matrix.ref }}) が HTTP $code。一時停止されている可能性がある: https://supabase.com/dashboard/project/${{ matrix.ref }}"
+          exit 1
