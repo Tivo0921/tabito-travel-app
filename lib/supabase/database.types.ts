@@ -34,6 +34,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_usage: {
+        Row: {
+          count: number
+          day: string
+          kind: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          count?: number
+          day: string
+          kind: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          count?: number
+          day?: string
+          kind?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       areas: {
         Row: {
           created_at: string
@@ -1102,6 +1126,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_api_usage: {
+        Args: {
+          p_global_limit?: number
+          p_kind: string
+          p_now?: string
+          p_user_id: string
+          p_user_limit: number
+        }
+        Returns: string | null
+      }
+      release_api_usage: {
+        Args: {
+          p_day: string
+          p_include_global?: boolean
+          p_kind: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       apply_plan_schedule: {
         Args: { item_ids: string[]; times: string[] }
         Returns: undefined
