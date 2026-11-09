@@ -38,9 +38,10 @@ CREATE POLICY "api_usage_select_own" ON public.api_usage
   FOR SELECT TO authenticated
   USING (user_id = (SELECT auth.uid()));
 
--- RLS にポリシーが無ければ書けないが、既定の GRANT も外しておく
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.api_usage FROM anon, authenticated;
-REVOKE ALL ON public.api_usage FROM anon;
+-- RLS にポリシーが無ければ書けないが、Supabase の既定の GRANT ALL も外し、
+-- authenticated には SELECT だけを残す
+REVOKE ALL ON public.api_usage FROM anon, authenticated;
+GRANT SELECT ON public.api_usage TO authenticated;
 
 -- ────────────────────────────────────────────────
 -- 3. 回数の確認と加算

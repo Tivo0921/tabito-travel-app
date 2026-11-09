@@ -302,10 +302,14 @@ export async function POST(req: NextRequest) {
     // 数えられないときは通さない。上限を確かめずに課金 API を呼ばない
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
-  // ここから先の上流の失敗は利用者の責任ではないので、回数を戻してから返す
-  const upstreamError = async () => {
+  const upstreamError = () => NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+  // 上流の失敗は利用者の責任ではないので回数を戻す。ただし戻すのは
+  // **OpenAI に課金されていないと言える失敗だけ**（接続できなかった・エラー応答）。
+  // incomplete・空・JSON でない応答やタイムアウトは生成分が課金されるので戻さない。
+  // 戻すと、質問で incomplete を起こし続けて1日の上限を素通りできてしまう
+  const unbilledUpstreamError = async () => {
     await releaseDailyUsage({ kind: 'plan_advise', userId: user.id, day: usage.day });
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   };
 
   const itinerary = renderItinerary(plan, usedItems);
@@ -363,13 +367,15 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error('plan/advise fetch failed:', e);
-    return upstreamError();
+    // タイムアウトはこちらが待つのをやめただけで、OpenAI 側では生成が続き課金される
+    if (e instanceof Error && e.name === 'TimeoutError') return upstreamError();
+    return unbilledUpstreamError();
   }
 
   if (!res.ok) {
     // 上流の本文はキーやクォータの情報を含みうるので、呼び出し側には返さない
     console.error('plan/advise upstream:', res.status, await res.text().catch(() => ''));
-    return upstreamError();
+    return unbilledUpstreamError();
   }
 
   const body = await res.json().catch(() => null);

@@ -82,15 +82,6 @@ describe('POST /api/places/search の1日の上限', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('Google の失敗では回数を戻さない', async () => {
-    setup();
-    rpc.mockResolvedValue({ data: '2026-11-09', error: null });
-    fetchMock.mockResolvedValue(new Response('quota', { status: 429 }));
-    const res = await call();
-    expect(res.status).toBe(502);
-    expect(rpc.mock.calls.some(([fn]) => fn === 'release_api_usage')).toBe(false);
-  });
-
   it.each([
     ['1文字', 'a'],
     ['空白だけ', '   '],

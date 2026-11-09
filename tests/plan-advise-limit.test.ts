@@ -90,22 +90,37 @@ describe('POST /api/plan/advise の1日の上限', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['ネットワーク断', () => fetchMock.mockRejectedValue(new Error('network'))],
-    ['OpenAI が 500', () => fetchMock.mockResolvedValue(new Response('err', { status: 500 }))],
-    ['incomplete', () => fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'incomplete' }), { status: 200 }))],
-    ['本文が空', () => fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output: [] }), { status: 200 }))],
-    ['JSON でない', () => fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output_text: 'not json' }), { status: 200 }))],
-  ])('OpenAI 失敗（%s）では数えた日の回数を戻して 502', async (_name, arrange) => {
-    const uid = setup();
+  const consumeOk = () =>
     rpc.mockImplementation(async (fn: string) =>
       fn === 'consume_api_usage' ? { data: '2026-11-09', error: null } : { data: null, error: null });
+
+  it.each([
+    ['ネットワーク断', () => fetchMock.mockRejectedValue(new TypeError('fetch failed'))],
+    ['OpenAI が 500', () => fetchMock.mockResolvedValue(new Response('err', { status: 500 }))],
+    ['OpenAI が 429', () => fetchMock.mockResolvedValue(new Response('quota', { status: 429 }))],
+  ])('課金されない失敗（%s）では数えた日の回数を戻して 502', async (_name, arrange) => {
+    const uid = setup();
+    consumeOk();
     arrange();
     const res = await call();
     expect(res.status).toBe(502);
     expect(releaseCalls()).toEqual([
       ['release_api_usage', { p_kind: 'plan_advise', p_user_id: uid, p_day: '2026-11-09', p_include_global: false }],
     ]);
+  });
+
+  it.each([
+    ['タイムアウト', () => fetchMock.mockRejectedValue(new DOMException('timed out', 'TimeoutError'))],
+    ['incomplete', () => fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'incomplete' }), { status: 200 }))],
+    ['本文が空', () => fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output: [] }), { status: 200 }))],
+    ['JSON でない', () => fetchMock.mockResolvedValue(new Response(JSON.stringify({ status: 'completed', output_text: 'not json' }), { status: 200 }))],
+  ])('課金されうる失敗（%s）では回数を戻さず 502', async (_name, arrange) => {
+    setup();
+    consumeOk();
+    arrange();
+    const res = await call();
+    expect(res.status).toBe(502);
+    expect(releaseCalls()).toHaveLength(0);
   });
 
   it('回数を戻すのに失敗しても 502 を返す', async () => {
