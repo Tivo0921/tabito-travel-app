@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { consumeDailyUsage, readLimit, releaseDailyUsage } from '@/lib/usage-limit';
 
 /**
  * 計画について相談する。#16
@@ -20,7 +21,13 @@ const UPSTREAM_TIMEOUT_MS = 30_000;
 /** 行程側にも上限を置く。質問だけ制限しても、アイテムを大量に作れば入力を膨らませられる */
 const MAX_ITEMS = 60;
 
-/** 1ユーザーあたりの呼び出し制限。減速帯であって上限ではない（本当の歯止めは課金側の上限） */
+/** 1ユーザーあたり1日の上限（日本時間 0:00 で切り替え）の既定値。#65 */
+const DEFAULT_DAILY_LIMIT = 10;
+
+/**
+ * 1ユーザーあたりの短時間の呼び出し制限。プロセスのメモリで数える減速帯。
+ * 1日の上限は DB 側（consumeDailyUsage）で数える
+ */
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 5;
 const recentCalls = new Map<string, number[]>();
@@ -282,6 +289,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
   }
 
+  // 1日の上限。OpenAI を呼ぶ直前に数える（入力の不備やキー未設定では消費させない）
+  const usage = await consumeDailyUsage({
+    kind: 'plan_advise',
+    userId: user.id,
+    userLimit: readLimit(process.env.AI_DAILY_LIMIT, DEFAULT_DAILY_LIMIT),
+  });
+  if (!usage.ok) {
+    if (usage.reason === 'limit') {
+      return NextResponse.json({ error: 'daily_limit' }, { status: 429 });
+    }
+    // 数えられないときは通さない。上限を確かめずに課金 API を呼ばない
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+  }
+  const upstreamError = () => NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+  // 上流の失敗は利用者の責任ではないので回数を戻す。ただし戻すのは
+  // **OpenAI に課金されていないと言える失敗だけ**（接続できなかった・エラー応答）。
+  // incomplete・空・JSON でない応答やタイムアウトは生成分が課金されるので戻さない。
+  // 戻すと、質問で incomplete を起こし続けて1日の上限を素通りできてしまう
+  const unbilledUpstreamError = async () => {
+    await releaseDailyUsage({ kind: 'plan_advise', userId: user.id, day: usage.day });
+    return upstreamError();
+  };
+
   const itinerary = renderItinerary(plan, usedItems);
   const userContent = q
     ? `${itinerary}\n---\n質問: ${q}`
@@ -337,13 +367,15 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error('plan/advise fetch failed:', e);
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    // タイムアウトはこちらが待つのをやめただけで、OpenAI 側では生成が続き課金される
+    if (e instanceof Error && e.name === 'TimeoutError') return upstreamError();
+    return unbilledUpstreamError();
   }
 
   if (!res.ok) {
     // 上流の本文はキーやクォータの情報を含みうるので、呼び出し側には返さない
     console.error('plan/advise upstream:', res.status, await res.text().catch(() => ''));
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return unbilledUpstreamError();
   }
 
   const body = await res.json().catch(() => null);
@@ -355,7 +387,7 @@ export async function POST(req: NextRequest) {
       'plan/advise: response incomplete:',
       body?.incomplete_details?.reason ?? 'unknown',
     );
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   }
   // Responses API は output_text に本文がまとまる。無ければ output を辿る
   const text: string =
@@ -368,7 +400,7 @@ export async function POST(req: NextRequest) {
 
   if (!text) {
     console.error('plan/advise: empty response', JSON.stringify(body).slice(0, 400));
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   }
 
   let parsed: {
@@ -378,7 +410,7 @@ export async function POST(req: NextRequest) {
     parsed = JSON.parse(text);
   } catch {
     console.error('plan/advise: response was not JSON', text.slice(0, 200));
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   }
 
   const asLines = (v: unknown): string[] =>
