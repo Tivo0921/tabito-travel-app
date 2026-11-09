@@ -23,6 +23,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      - name: Unit tests
+        run: npm test
+
       # NOTE: lint は未セットアップ（ESLint / config 未導入）のため意図的に外している。
       # eslint-config-next 等を入れたら独立ステップとして追加する。
       # 握り潰した continue-on-error で「lint通過」に見せないための措置。
