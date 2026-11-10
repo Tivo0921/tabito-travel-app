@@ -1,0 +1,55 @@
+import type Stripe from 'stripe';
+import { createServiceClient } from '@/lib/supabase/service';
+
+/**
+ * 支払い済みの Checkout Session を purchases に記録する（service role）。
+ *
+ * 書き込むのは Stripe Webhook（app/api/stripe/webhook）と決済後のリダイレクト
+ * （app/api/checkout/verify）の2経路だけ。どちらが先に来ても、何度来ても
+ * stripe_session_id の UNIQUE で1行に収まる（2回目以降は何もしない）。
+ *
+ * user_id は呼び出し側で決める。Webhook は Checkout 作成時にサーバーが入れた
+ * metadata.user_id、verify はそれとログイン中のユーザーの一致を確かめた user.id。
+ */
+export type RecordPurchaseResult =
+  | { ok: true }
+  /** 再送しても直らない失敗（ユーザーやパッケージが既に存在しない等） */
+  | { ok: false; permanent: true; code: string | undefined }
+  /** 一時的な失敗の可能性がある。Webhook は 5xx を返して Stripe に再送させる */
+  | { ok: false; permanent: false; code: string | undefined };
+
+/**
+ * 再送しても結果が変わらない PostgreSQL のエラーコード。
+ * 23503: 外部キー違反（Checkout 後にアカウント削除された・パッケージが消えた）
+ * 22P02: 型の不正（metadata の user_id / package_id が UUID でない）
+ */
+const PERMANENT_ERROR_CODES = new Set(['23503', '22P02']);
+
+export function paymentIntentId(session: Stripe.Checkout.Session): string | null {
+  const pi = session.payment_intent;
+  if (!pi) return null;
+  return typeof pi === 'string' ? pi : pi.id;
+}
+
+export async function recordPurchase(
+  session: Stripe.Checkout.Session,
+  ids: { userId: string; packageId: string },
+): Promise<RecordPurchaseResult> {
+  const service = createServiceClient();
+  const { error } = await service.from('purchases').upsert(
+    {
+      user_id: ids.userId,
+      package_id: ids.packageId,
+      amount: session.amount_total ?? 0,
+      currency: session.currency?.toUpperCase() ?? 'JPY',
+      status: 'completed',
+      stripe_session_id: session.id,
+      stripe_payment_intent_id: paymentIntentId(session),
+    },
+    { onConflict: 'stripe_session_id', ignoreDuplicates: true },
+  );
+
+  if (!error) return { ok: true };
+  const code = (error as { code?: string }).code;
+  return { ok: false, permanent: PERMANENT_ERROR_CODES.has(code ?? ''), code };
+}

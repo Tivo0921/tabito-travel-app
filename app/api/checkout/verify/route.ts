@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { createClient } from '@/lib/supabase/server';
-import { createServiceClient } from '@/lib/supabase/service';
+import { recordPurchase } from '@/lib/purchases';
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('session_id');
@@ -35,27 +35,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'No package_id in session' }, { status: 400 });
   }
 
-  // 購入記録は Stripe で支払いを確認したこの経路と Webhook だけが書く。
-  // authenticated には purchases の INSERT ポリシーが無いので service role で書く
-  // （20261105000001_drop_purchases_insert_own.sql）。
+  // 購入記録は Stripe で支払いを確認したこの経路と Webhook だけが書く（lib/purchases.ts）。
   // user_id は Stripe の metadata ではなく、上で一致を確かめたログイン中のユーザーを使う。
-  const service = createServiceClient();
-  const { error } = await service.from('purchases').upsert(
-    {
-      user_id: user.id,
-      package_id: packageId,
-      amount: session.amount_total ?? 0,
-      currency: session.currency?.toUpperCase() ?? 'JPY',
-      status: 'completed',
-      stripe_session_id: session.id,
-    },
-    // Webhook が先に書いていれば何もしない（冪等）
-    { onConflict: 'stripe_session_id', ignoreDuplicates: true }
-  );
+  // Webhook が先に書いていれば何もしない（冪等）。
+  const result = await recordPurchase(session, { userId: user.id, packageId });
 
-  if (error) {
+  if (!result.ok) {
     // 支払い済みなのに記録できていない。成功を返すと閲覧できないまま終わるので失敗を返す
-    console.error('checkout verify: purchases upsert failed', error);
+    console.error('checkout verify: purchases upsert failed', { session_id: session.id, code: result.code });
     return NextResponse.json({ ok: false, error: 'Failed to record purchase' }, { status: 500 });
   }
 
