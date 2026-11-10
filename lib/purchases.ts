@@ -14,9 +14,9 @@ import { createServiceClient } from '@/lib/supabase/service';
 export type RecordPurchaseResult =
   | { ok: true }
   /** 再送しても直らない失敗（ユーザーやパッケージが既に存在しない等） */
-  | { ok: false; permanent: true; code: string | undefined }
+  | { ok: false; permanent: true; code: string | undefined; message?: string }
   /** 一時的な失敗の可能性がある。Webhook は 5xx を返して Stripe に再送させる */
-  | { ok: false; permanent: false; code: string | undefined };
+  | { ok: false; permanent: false; code: string | undefined; message?: string };
 
 /**
  * 再送しても結果が変わらない PostgreSQL のエラーコード。
@@ -51,5 +51,16 @@ export async function recordPurchase(
 
   if (!error) return { ok: true };
   const code = (error as { code?: string }).code;
-  return { ok: false, permanent: PERMANENT_ERROR_CODES.has(code ?? ''), code };
+  // 23505: 一意制約違反。ON CONFLICT が見るのは stripe_session_id だけで、
+  // stripe_payment_intent_id の UNIQUE で衝突した場合はこのエラーになる。
+  // purchases の一意制約はこの2列だけで、どちらも同じ購入を指すので、行は既にある＝成功とする。
+  // （PostgreSQL 16 で Webhook と verify の同時 INSERT を再現した範囲では 23505 は出ず
+  //   INSERT 0 0 になったが、制約の評価順に依存しないよう防御として残す）
+  if (code === '23505') return { ok: true };
+  return {
+    ok: false,
+    permanent: PERMANENT_ERROR_CODES.has(code ?? ''),
+    code,
+    message: (error as { message?: string }).message,
+  };
 }

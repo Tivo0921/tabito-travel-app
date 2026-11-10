@@ -42,7 +42,11 @@ export async function GET(req: NextRequest) {
 
   if (!result.ok) {
     // 支払い済みなのに記録できていない。成功を返すと閲覧できないまま終わるので失敗を返す
-    console.error('checkout verify: purchases upsert failed', { session_id: session.id, code: result.code });
+    console.error('checkout verify: purchases upsert failed', {
+      session_id: session.id,
+      code: result.code,
+      message: result.message,
+    });
     return NextResponse.json({ ok: false, error: 'Failed to record purchase' }, { status: 500 });
   }
 

@@ -69,12 +69,14 @@ export async function POST(req: NextRequest) {
     console.error('stripe webhook: purchase could not be recorded (needs manual action)', {
       ...log,
       code: result.code,
+      message: result.message,
     });
     return NextResponse.json({ received: true });
   }
   console.error('stripe webhook: purchases upsert failed, Stripe will retry', {
     ...log,
     code: result.code,
+    message: result.message,
   });
   return NextResponse.json({ error: 'Failed to record purchase' }, { status: 500 });
 }

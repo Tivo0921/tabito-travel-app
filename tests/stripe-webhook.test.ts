@@ -127,12 +127,12 @@ describe('POST /api/stripe/webhook: checkout.session.completed', () => {
     expect(upsert.mock.calls[0][0].stripe_payment_intent_id).toBe('pi_obj');
   });
 
-  it('payment_intent が null（0円など）でも記録する', async () => {
+  it('payment_intent が null でも記録する（列は null）', async () => {
     await POST(req(event('checkout.session.completed', session({ payment_intent: null }))));
     expect(upsert.mock.calls[0][0].stripe_payment_intent_id).toBeNull();
   });
 
-  it('同じイベントの再送は同じ競合キーで upsert し、ignoreDuplicates で1行に収まる', async () => {
+  it('同じイベントの再送は毎回同じ競合キー（stripe_session_id・ignoreDuplicates）で upsert する', async () => {
     const payload = event('checkout.session.completed', session());
     await POST(req(payload));
     await POST(req(payload));
@@ -174,6 +174,12 @@ describe('POST /api/stripe/webhook: checkout.session.completed', () => {
     upsert.mockResolvedValue({ data: null, error: { message: 'fetch failed' } });
     const res = await POST(req(event('checkout.session.completed', session())));
     expect(res.status).toBe(500);
+  });
+
+  it('verify と同時に書いて payment_intent の一意制約（23505）に当たっても 200（行は既にある）', async () => {
+    upsert.mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate key' } });
+    const res = await POST(req(event('checkout.session.completed', session())));
+    expect(res.status).toBe(200);
   });
 
   it.each(['23503', '22P02'])('再送しても直らないエラー（%s）は 200 でログに残す', async (code) => {

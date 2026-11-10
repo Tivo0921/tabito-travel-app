@@ -72,6 +72,14 @@ describe('GET /api/checkout/verify', () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
+  it('Webhook と同時に書いて一意制約（23505）に当たっても 200（支払い済みを失敗と表示しない）', async () => {
+    retrieve.mockResolvedValue(paid());
+    upsert.mockResolvedValue({ data: null, error: { code: '23505', message: 'duplicate key' } });
+    const res = await call();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, package_id: 'p1' });
+  });
+
   it('DB 書き込み失敗は 500', async () => {
     retrieve.mockResolvedValue(paid());
     upsert.mockResolvedValue({ data: null, error: { code: '08006', message: 'x' } });

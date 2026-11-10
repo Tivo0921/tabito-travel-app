@@ -5,6 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Stripe Webhook。Stripe は 3xx を失敗とみなして再送し、続けばエンドポイントを
  * 無効化するので、メンテナンス中でもリダイレクトしない。
  * Stripe のリクエストには Cookie が無いので、セッション更新（getUser）も行わない。
+ * proxy() の先頭で素通しする（メンテナンス判定より前）。
  */
 const STRIPE_WEBHOOK_PATH = '/api/stripe/webhook';
 
@@ -19,7 +20,7 @@ const STRIPE_WEBHOOK_PATH = '/api/stripe/webhook';
  * メンテ中に通してもサービスを開いたことにはならない。
  * 連れ戻した先（/home 等）は通常どおりメンテに飛ぶ。
  */
-const MAINTENANCE_EXEMPT_PATHS = ['/maintenance', '/auth/callback', STRIPE_WEBHOOK_PATH];
+const MAINTENANCE_EXEMPT_PATHS = ['/maintenance', '/auth/callback'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
