@@ -452,6 +452,7 @@ export const ja = {
   'creator.action.publish': '公開する',
   'creator.action.delete': '削除',
   'creator.actionFailed': '操作できませんでした。自分が作成したコンテンツか確認してください',
+  'creator.deleteBlockedPurchased': '購入履歴があるパッケージは削除できません。販売をやめるには「下書きに戻す」を使ってください',
   'creator.loadFailed': '読み込みに失敗しました。通信状況を確認して、画面を再読み込みしてください',
   'creator.registerFailed': 'クリエイター登録に失敗しました。時間をおいてもう一度お試しください',
   'creator.profile.edit': 'プロフィールを編集',

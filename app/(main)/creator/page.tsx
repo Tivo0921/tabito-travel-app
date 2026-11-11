@@ -51,6 +51,8 @@ export default function CreatorPage() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [packages, setPackages] = useState<CreatorPackage[]>([]);
   const [actionError, setActionError] = useState(false);
+  // 売れたパッケージは削除できない。権限エラーとは別の文言を出す #25
+  const [deleteBlocked, setDeleteBlocked] = useState(false);
   const [registerError, setRegisterError] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -94,6 +96,9 @@ export default function CreatorPage() {
   const [reloading, setReloading] = useState(false);
   const handleReload = async () => {
     setReloading(true);
+    // 再読み込みを押した時点で、削除できなかった案内は役目を終えている。
+    // 残すと、取得に成功してもバナーが「購入済み」の文言のまま消えない
+    setDeleteBlocked(false);
     // このボタンが押されるのは通信が不安定なとき。auth.getUser() は
     // ネットワーク断で reject し得るので、finally で必ず戻す。
     // でないと reloading が true のまま固定され、再試行が二度とできない。
@@ -165,9 +170,17 @@ export default function CreatorPage() {
   const handleDelete = async (pkgId: string) => {
     if (!confirm(t('creator.confirmDelete'))) return;
     // 楽観的に消すと、失敗しても消えたように見える
-    const ok = await deleteCreatorPackage(pkgId);
-    if (!ok) return setActionError(true);
+    const result = await deleteCreatorPackage(pkgId);
+    if (result === 'purchased') {
+      setActionError(false);
+      return setDeleteBlocked(true);
+    }
+    if (result !== 'ok') {
+      setDeleteBlocked(false);
+      return setActionError(true);
+    }
     // 直前の操作が通ったのに、古い取得失敗のバナーが残らないようにする
+    setDeleteBlocked(false);
     setActionError(false);
     setLoadError(false);
     setPackages((prev) => prev.filter((p) => p.id !== pkgId));
@@ -176,6 +189,7 @@ export default function CreatorPage() {
   const handleToggleStatus = async (pkgId: string, currentStatus: string) => {
     const next = currentStatus === 'published' ? 'draft' : 'published';
     const ok = await setPackageStatus(pkgId, next);
+    setDeleteBlocked(false);
     if (!ok) return setActionError(true);
     setActionError(false);
     setLoadError(false);
@@ -214,14 +228,20 @@ export default function CreatorPage() {
           固定値の bottom-24(96px) だとノッチ端末でナビの下に潜る。
           セーフエリアを足した高さに出す。z も BottomNav(z-50)より上に置く
           （レイアウト上ナビの方が後に描画されるため、同値だと負ける）。 */}
-      {(actionError || loadError) && (
+      {(actionError || deleteBlocked || loadError) && (
         <div
           role="alert"
           className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+7rem)] z-[60] px-5 lg:bottom-6 lg:left-64"
         >
           <div className="mx-auto max-w-lg p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 shadow-lg flex items-center gap-3">
             <p className="flex-1">
-              {t(actionError ? 'creator.actionFailed' : 'creator.loadFailed')}
+              {t(
+                deleteBlocked
+                  ? 'creator.deleteBlockedPurchased'
+                  : actionError
+                    ? 'creator.actionFailed'
+                    : 'creator.loadFailed',
+              )}
             </p>
             {/* 取得失敗は引き直せる。操作失敗と同時に立っていても、
                 引き直せること自体は変わらないので出す
