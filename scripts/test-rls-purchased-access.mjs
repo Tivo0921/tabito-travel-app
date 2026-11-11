@@ -7,8 +7,8 @@ const service = createClient(URL, SR, { auth: { persistSession: false } });
 let fail = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`); if (!ok) fail++; };
 
-// スポットを持つ公開中パッケージを1つ選ぶ
-const { data: spotRow } = await service.from('spots').select('package_id').limit(1).single();
+// スポットを持つ公開中パッケージを1つ選ぶ（公開→非公開の変化を確かめるため）
+const { data: spotRow } = await service.from('spots').select('package_id, packages!inner(status)').eq('packages.status', 'published').limit(1).single();
 const pkgId = spotRow.package_id;
 const { data: pkg } = await service.from('packages').select('id, status, guide_id').eq('id', pkgId).single();
 const originalStatus = pkg.status;
@@ -18,13 +18,16 @@ const mk = async (tag) => {
   const email = `rls25-${tag}-${stamp}@example.com`;
   const { data, error } = await service.auth.admin.createUser({ email, password: 'pw-123456!', email_confirm: true });
   if (error) throw error;
+  // 途中で失敗しても finally で消せるよう、作った時点で記録する
+  created.push(data.user.id);
   // purchases.user_id は profiles を参照する
   { const { error: e } = await service.from('profiles').upsert({ id: data.user.id }); if (e) throw e; }
   const client = createClient(URL, ANON, { auth: { persistSession: false } });
   { const { error: e } = await client.auth.signInWithPassword({ email, password: 'pw-123456!' }); if (e) throw e; }
   return { id: data.user.id, client };
 };
-const buyer = await mk('buyer'), refunded = await mk('refunded'), pending = await mk('pending'), stranger = await mk('stranger');
+const created = [];
+let buyer, refunded, pending, stranger;
 
 const counts = async (client) => {
   const { data: p } = await client.from('packages').select('id').eq('id', pkgId);
@@ -36,6 +39,7 @@ const counts = async (client) => {
 };
 
 try {
+  buyer = await mk('buyer'); refunded = await mk('refunded'); pending = await mk('pending'); stranger = await mk('stranger');
   const ins = await service.from('purchases').insert([
     { user_id: buyer.id, package_id: pkgId, amount: 500, currency: 'JPY', status: 'completed', stripe_session_id: `cs_rls25_a_${stamp}` },
     { user_id: refunded.id, package_id: pkgId, amount: 500, currency: 'JPY', status: 'refunded', stripe_session_id: `cs_rls25_b_${stamp}` },
@@ -69,7 +73,7 @@ try {
   }
 } finally {
   await service.from('packages').update({ status: originalStatus }).eq('id', pkgId);
-  await service.from('purchases').delete().in('user_id', [buyer.id, refunded.id, pending.id, stranger.id]);
-  for (const u of [buyer, refunded, pending, stranger]) await service.auth.admin.deleteUser(u.id);
+  await service.from('purchases').delete().in('user_id', created);
+  for (const id of created) await service.auth.admin.deleteUser(id);
 }
 process.exit(fail ? 1 : 0);
