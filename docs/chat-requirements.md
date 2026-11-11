@@ -20,7 +20,7 @@
 
 ## 3. 既存実装の前提（調査済み）
 
-- 購入完了は `app/api/webhook/route.ts`（Stripe webhook）と `app/api/checkout/verify/route.ts`
+- 購入完了は `app/api/stripe/webhook/route.ts`（Stripe webhook）と `app/api/checkout/verify/route.ts`
   が `purchases.status = 'completed'` を書き込んで確定する。チャット解禁はこれに乗せる
 - `hasPurchased()` (`lib/supabase/queries.ts:896`) が購入判定を持っている。**ただし現在
   `user_id` で絞っていない**ため、チャット権限判定に流用する前に要確認（§7-4）

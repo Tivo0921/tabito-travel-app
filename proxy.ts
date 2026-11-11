@@ -2,6 +2,14 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
+ * Stripe Webhook。Stripe は 3xx を失敗とみなして再送し、続けばエンドポイントを
+ * 無効化するので、メンテナンス中でもリダイレクトしない。
+ * Stripe のリクエストには Cookie が無いので、セッション更新（getUser）も行わない。
+ * proxy() の先頭で素通しする（メンテナンス判定より前）。
+ */
+const STRIPE_WEBHOOK_PATH = '/api/stripe/webhook';
+
+/**
  * メンテナンス中でも通すパス。
  *
  * /auth/callback を止めると、Google から戻ってきた認可コードが交換されないまま
@@ -16,6 +24,10 @@ const MAINTENANCE_EXEMPT_PATHS = ['/maintenance', '/auth/callback'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === STRIPE_WEBHOOK_PATH) {
+    return NextResponse.next({ request });
+  }
 
   if (
     process.env.MAINTENANCE_MODE === 'true' &&
