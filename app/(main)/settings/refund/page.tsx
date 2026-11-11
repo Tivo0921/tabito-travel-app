@@ -34,13 +34,23 @@ export default function RefundPolicyPage() {
           {REFUND_SECTIONS.map((section) => (
             <section key={section.titleKey}>
               <h2 className="text-sm font-bold text-[var(--text-main)] mb-2">{t(section.titleKey)}</h2>
-              <div className="space-y-2">
-                {section.bodyKeys.map((bodyKey) => (
-                  <p key={bodyKey} className="text-sm text-[var(--text-sub)] leading-relaxed">
-                    {t(bodyKey)}
-                  </p>
-                ))}
-              </div>
+              {section.list ? (
+                <ul className="list-disc pl-5 space-y-1">
+                  {section.bodyKeys.map((bodyKey) => (
+                    <li key={bodyKey} className="text-sm text-[var(--text-sub)] leading-relaxed">
+                      {t(bodyKey)}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="space-y-2">
+                  {section.bodyKeys.map((bodyKey) => (
+                    <p key={bodyKey} className="text-sm text-[var(--text-sub)] leading-relaxed">
+                      {t(bodyKey)}
+                    </p>
+                  ))}
+                </div>
+              )}
             </section>
           ))}
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">

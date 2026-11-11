@@ -72,9 +72,10 @@ export function missingBusinessFields(
 }
 
 /** 返金ポリシーの節。本文はすべて辞書（ja が正本） */
-export const REFUND_SECTIONS: { titleKey: TranslationKey; bodyKeys: TranslationKey[] }[] = [
+/** list: 本文を条件の箇条書きとして出す */
+export const REFUND_SECTIONS: { titleKey: TranslationKey; bodyKeys: TranslationKey[]; list?: boolean }[] = [
   { titleKey: 'refund.s1.title', bodyKeys: ['refund.s1.p1'] },
-  { titleKey: 'refund.s2.title', bodyKeys: ['refund.s2.p1', 'refund.s2.p2', 'refund.s2.p3'] },
+  { titleKey: 'refund.s2.title', bodyKeys: ['refund.s2.p1', 'refund.s2.p2', 'refund.s2.p3'], list: true },
   { titleKey: 'refund.s3.title', bodyKeys: ['refund.s3.p1'] },
   { titleKey: 'refund.s4.title', bodyKeys: ['refund.s4.p1'] },
 ];

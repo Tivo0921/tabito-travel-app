@@ -54,4 +54,10 @@ describe('文言', () => {
   it.each([['ja', ja], ['en', en], ['ko', ko]] as const)('%s に空でない文言がある', (_lang, dict) => {
     for (const k of keys) expect((dict as Record<string, string>)[k]?.trim(), k).toBeTruthy();
   });
+  it.each([['en', en], ['ko', ko]] as const)('%s は日本語のままになっていない（翻訳漏れ）', (_lang, dict) => {
+    for (const k of keys) expect((dict as Record<string, string>)[k], k).not.toBe((ja as Record<string, string>)[k]);
+  });
+  it('返金の条件は箇条書きの節としてまとめる', () => {
+    expect(REFUND_SECTIONS.filter((s) => s.list).map((s) => s.titleKey)).toEqual(['refund.s2.title']);
+  });
 });
