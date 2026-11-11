@@ -143,7 +143,7 @@ app/
     manner/ magazine/ route/ settings/
   api/
     checkout/      # Stripe Checkout セッション作成・検証
-    webhook/       # Stripe Webhook（購入の確定）
+    stripe/webhook # Stripe Webhook（購入の確定）
     account/delete # アカウント削除
   auth/callback/   # Supabase OAuth コールバック
 lib/
