@@ -2119,7 +2119,28 @@ export async function setPackageStatus(
   return true;
 }
 
-export async function deleteCreatorPackage(packageId: string): Promise<boolean> {
+export type DeleteCreatorPackageResult = 'ok' | 'purchased' | 'error';
+
+/**
+ * 削除の失敗理由を分類する。
+ *
+ * purchases.package_id は ON DELETE RESTRICT なので、1件でも売れていると
+ * 外部キー違反（23503）になる。購入履歴は返金・売上集計に要るので消さない。
+ * この場合は「権限が無い」とは別の理由として呼び出し側に伝える。#25
+ *
+ * packages を参照する他の外部キーは CASCADE / SET NULL なので、
+ * 23503 は purchases 由来のはずだが、制約名でも確かめる。
+ */
+export function classifyPackageDeleteError(
+  error: { code?: string | null; message?: string | null } | null,
+): Exclude<DeleteCreatorPackageResult, 'ok'> {
+  if (error?.code === '23503' && (error.message ?? '').includes('purchases_package_id_fkey')) {
+    return 'purchased';
+  }
+  return 'error';
+}
+
+export async function deleteCreatorPackage(packageId: string): Promise<DeleteCreatorPackageResult> {
   const supabase = createClient();
   // 削除も RLS に弾かれると 204 / 0件 で返る。消えたかを確認する。
   const { data, error } = await supabase
@@ -2127,11 +2148,16 @@ export async function deleteCreatorPackage(packageId: string): Promise<boolean> 
     .delete()
     .eq('id', packageId)
     .select('id');
-  if (error || !data || data.length === 0) {
-    console.error('deleteCreatorPackage failed:', error?.message ?? '0 rows affected');
-    return false;
+  if (error) {
+    const reason = classifyPackageDeleteError(error);
+    if (reason === 'error') console.error('deleteCreatorPackage failed:', error.message);
+    return reason;
   }
-  return true;
+  if (!data || data.length === 0) {
+    console.error('deleteCreatorPackage failed: 0 rows affected');
+    return 'error';
+  }
+  return 'ok';
 }
 
 /**

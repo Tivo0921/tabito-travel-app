@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
     .from('packages')
     .select('id, price, currency')
     .eq('id', packageId)
+    // 購入者は非公開後も RLS で読める（#25）ので、販売中かは明示的に絞る
+    .eq('status', 'published')
     .single();
 
   if (error || !pkg) {

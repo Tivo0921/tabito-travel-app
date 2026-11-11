@@ -448,6 +448,7 @@ export const en: Record<TranslationKey, string> = {
   'creator.action.publish': 'Publish',
   'creator.action.delete': 'Delete',
   'creator.actionFailed': 'That action did not go through. Check that this is content you created.',
+  'creator.deleteBlockedPurchased': 'Packages that have been purchased cannot be deleted. Buyers keep access to them. To stop selling, use "Move to drafts" instead.',
   'creator.loadFailed': 'Could not load your content. Check your connection and reload the page.',
   'creator.registerFailed': 'Could not complete creator registration. Please try again in a moment.',
   'creator.profile.edit': 'Edit profile',
