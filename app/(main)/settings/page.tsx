@@ -13,6 +13,8 @@ import {
   FileText,
   Star,
   Trash2,
+  Scale,
+  ReceiptText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useT, useLocale } from '@/lib/i18n/provider';
@@ -44,6 +46,8 @@ const settingGroups: { titleKey: TranslationKey; items: SettingItem[] }[] = [
     items: [
       { id: 'about', icon: Info, labelKey: 'settings.item.about', href: '/settings/about', desc: 'v1.0.0' },
       { id: 'terms', icon: FileText, labelKey: 'settings.item.terms', href: '/settings/terms' },
+      { id: 'legal', icon: Scale, labelKey: 'settings.item.legal', href: '/settings/legal' },
+      { id: 'refund', icon: ReceiptText, labelKey: 'settings.item.refund', href: '/settings/refund' },
       { id: 'review', icon: Star, labelKey: 'settings.item.review', href: '/settings/review' },
     ],
   },

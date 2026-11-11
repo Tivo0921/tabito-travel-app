@@ -598,6 +598,17 @@ export default function PackageDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-xs text-[var(--muted)] text-center mt-4">
               {t('package.modal.stripeNote')}
             </p>
+            {/* 特商法の表記と返金ポリシーは購入前に確認できる位置に置く #67 */}
+            <p className="text-xs text-[var(--muted)] text-center mt-2">
+              {t('package.modal.policyNote')}:{' '}
+              <Link href="/settings/refund" className="underline text-[var(--primary)]">
+                {t('settings.item.refund')}
+              </Link>
+              {' / '}
+              <Link href="/settings/legal" className="underline text-[var(--primary)]">
+                {t('settings.item.legal')}
+              </Link>
+            </p>
           </div>
         </div>
       )}
