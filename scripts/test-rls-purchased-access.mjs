@@ -19,12 +19,12 @@ const mk = async (tag) => {
   const { data, error } = await service.auth.admin.createUser({ email, password: 'pw-123456!', email_confirm: true });
   if (error) throw error;
   // purchases.user_id は profiles を参照する
-  await service.from('profiles').upsert({ id: data.user.id });
+  { const { error: e } = await service.from('profiles').upsert({ id: data.user.id }); if (e) throw e; }
   const client = createClient(URL, ANON, { auth: { persistSession: false } });
-  await client.auth.signInWithPassword({ email, password: 'pw-123456!' });
+  { const { error: e } = await client.auth.signInWithPassword({ email, password: 'pw-123456!' }); if (e) throw e; }
   return { id: data.user.id, client };
 };
-const buyer = await mk('buyer'), refunded = await mk('refunded'), stranger = await mk('stranger');
+const buyer = await mk('buyer'), refunded = await mk('refunded'), pending = await mk('pending'), stranger = await mk('stranger');
 
 const counts = async (client) => {
   const { data: p } = await client.from('packages').select('id').eq('id', pkgId);
@@ -39,6 +39,7 @@ try {
   const ins = await service.from('purchases').insert([
     { user_id: buyer.id, package_id: pkgId, amount: 500, currency: 'JPY', status: 'completed', stripe_session_id: `cs_rls25_a_${stamp}` },
     { user_id: refunded.id, package_id: pkgId, amount: 500, currency: 'JPY', status: 'refunded', stripe_session_id: `cs_rls25_b_${stamp}` },
+    { user_id: pending.id, package_id: pkgId, amount: 500, currency: 'JPY', status: 'pending', stripe_session_id: `cs_rls25_c_${stamp}` },
   ]);
   if (ins.error) throw ins.error;
   const expected = await counts(service);
@@ -48,7 +49,7 @@ try {
   const b = await counts(buyer.client);
   check('購入者: 非公開後も本体・翻訳・スポット・フレーズを読める', JSON.stringify(b) === JSON.stringify(expected) && expected.s > 0, `${JSON.stringify(b)} / ${JSON.stringify(expected)}`);
   // 2. 返金済み・無関係・匿名は読めない
-  for (const [name, client] of [['返金済み', refunded.client], ['無関係', stranger.client], ['匿名', createClient(URL, ANON, { auth: { persistSession: false } })]]) {
+  for (const [name, client] of [['返金済み', refunded.client], ['pending', pending.client], ['無関係', stranger.client], ['匿名', createClient(URL, ANON, { auth: { persistSession: false } })]]) {
     const c = await counts(client);
     check(`${name}: 非公開パッケージを読めない`, Object.values(c).every((v) => v === 0), JSON.stringify(c));
   }
@@ -58,11 +59,17 @@ try {
   const d = await buyer.client.from('packages').delete().eq('id', pkgId).select('id');
   check('購入者: DELETE できない', (d.data?.length ?? 0) === 0, d.error?.code);
   // 4. 売れたパッケージの削除は purchases_package_id_fkey の 23503（UI の出し分けの前提）
-  const del = await service.from('packages').delete().eq('id', pkgId).select('id');
-  check('売れたパッケージの削除は 23503 / purchases_package_id_fkey', del.error?.code === '23503' && del.error.message.includes('purchases_package_id_fkey'), `${del.error?.code} ${del.error?.message}`);
+  //    購入行が無いまま試すと本当に消えてシードを壊すので、先に購入行があることを確かめる
+  const { count: held } = await service.from('purchases').select('id', { count: 'exact', head: true }).eq('package_id', pkgId);
+  if (held > 0) {
+    const del = await service.from('packages').delete().eq('id', pkgId).select('id');
+    check('売れたパッケージの削除は 23503 / purchases_package_id_fkey', del.error?.code === '23503' && del.error.message.includes('purchases_package_id_fkey'), `${del.error?.code} ${del.error?.message}`);
+  } else {
+    check('購入行が作られている（削除テストの前提）', false, `count=${held}`);
+  }
 } finally {
   await service.from('packages').update({ status: originalStatus }).eq('id', pkgId);
-  await service.from('purchases').delete().in('user_id', [buyer.id, refunded.id, stranger.id]);
-  for (const u of [buyer, refunded, stranger]) await service.auth.admin.deleteUser(u.id);
+  await service.from('purchases').delete().in('user_id', [buyer.id, refunded.id, pending.id, stranger.id]);
+  for (const u of [buyer, refunded, pending, stranger]) await service.auth.admin.deleteUser(u.id);
 }
 process.exit(fail ? 1 : 0);

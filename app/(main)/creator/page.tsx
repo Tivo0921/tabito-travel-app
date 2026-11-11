@@ -96,6 +96,9 @@ export default function CreatorPage() {
   const [reloading, setReloading] = useState(false);
   const handleReload = async () => {
     setReloading(true);
+    // 再読み込みを押した時点で、削除できなかった案内は役目を終えている。
+    // 残すと、取得に成功してもバナーが「購入済み」の文言のまま消えない
+    setDeleteBlocked(false);
     // このボタンが押されるのは通信が不安定なとき。auth.getUser() は
     // ネットワーク断で reject し得るので、finally で必ず戻す。
     // でないと reloading が true のまま固定され、再試行が二度とできない。

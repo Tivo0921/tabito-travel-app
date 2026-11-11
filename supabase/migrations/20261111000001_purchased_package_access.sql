@@ -13,6 +13,8 @@
 -- purchases の SELECT ポリシーは user_id = auth.uid() だけで packages を
 -- 参照しないため、ここから purchases を引いても再帰しない。
 -- 書き込み権限は一切増やさない（すべて FOR SELECT）。
+-- auth.uid() は (SELECT ...) で包み、行ごとではなく文ごとに1回だけ評価させる
+-- （20260807000001_chat_phase1.sql などと同じ書き方）。
 -- ════════════════════════════════════════════════════════════════
 
 CREATE POLICY "packages_select_purchased"
@@ -21,7 +23,7 @@ CREATE POLICY "packages_select_purchased"
   USING (
     id IN (
       SELECT package_id FROM purchases
-      WHERE user_id = auth.uid()
+      WHERE user_id = (SELECT auth.uid())
         AND status = 'completed'
     )
   );
@@ -32,7 +34,7 @@ CREATE POLICY "package_translations_select_purchased"
   USING (
     package_id IN (
       SELECT package_id FROM purchases
-      WHERE user_id = auth.uid()
+      WHERE user_id = (SELECT auth.uid())
         AND status = 'completed'
     )
   );
@@ -43,7 +45,7 @@ CREATE POLICY "spots_select_purchased"
   USING (
     package_id IN (
       SELECT package_id FROM purchases
-      WHERE user_id = auth.uid()
+      WHERE user_id = (SELECT auth.uid())
         AND status = 'completed'
     )
   );
@@ -55,7 +57,7 @@ CREATE POLICY "spot_translations_select_purchased"
     spot_id IN (
       SELECT s.id FROM spots s
       JOIN purchases pu ON pu.package_id = s.package_id
-      WHERE pu.user_id = auth.uid()
+      WHERE pu.user_id = (SELECT auth.uid())
         AND pu.status = 'completed'
     )
   );
@@ -67,7 +69,7 @@ CREATE POLICY "japanese_phrases_select_purchased"
     spot_id IN (
       SELECT s.id FROM spots s
       JOIN purchases pu ON pu.package_id = s.package_id
-      WHERE pu.user_id = auth.uid()
+      WHERE pu.user_id = (SELECT auth.uid())
         AND pu.status = 'completed'
     )
   );
@@ -80,7 +82,7 @@ CREATE POLICY "japanese_phrase_translations_select_purchased"
       SELECT jp.id FROM japanese_phrases jp
       JOIN spots s ON s.id = jp.spot_id
       JOIN purchases pu ON pu.package_id = s.package_id
-      WHERE pu.user_id = auth.uid()
+      WHERE pu.user_id = (SELECT auth.uid())
         AND pu.status = 'completed'
     )
   );

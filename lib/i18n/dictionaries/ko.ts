@@ -448,7 +448,7 @@ export const ko: Record<TranslationKey, string> = {
   'creator.action.publish': '공개하기',
   'creator.action.delete': '삭제',
   'creator.actionFailed': '작업을 완료하지 못했습니다. 본인이 만든 콘텐츠인지 확인해 주세요',
-  'creator.deleteBlockedPurchased': "구매된 패키지는 삭제할 수 없습니다. 구매자는 계속 열람할 수 있습니다. 판매를 중단하려면 '초안으로 되돌리기'를 사용해 주세요",
+  'creator.deleteBlockedPurchased': "구매 이력이 있는 패키지는 삭제할 수 없습니다. 판매를 중단하려면 '초안으로 되돌리기'를 사용해 주세요",
   'creator.loadFailed': '불러오지 못했습니다. 통신 상태를 확인하고 페이지를 새로고침해 주세요',
   'creator.registerFailed': '크리에이터 등록에 실패했습니다. 잠시 후 다시 시도해 주세요',
   'creator.profile.edit': '프로필 편집',
