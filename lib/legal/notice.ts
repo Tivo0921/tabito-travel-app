@@ -17,9 +17,12 @@ export const BUSINESS_INFO: Record<BusinessField, string | null> = {
   address: null,
   phone: null,
   email: null,
+  // 販売価格の表示。消費税の扱い（税込か、課税事業者か）はオーナーが決めて書く。
+  // 例: 「各パッケージのページに表示された金額（税込）」
+  price: null,
 };
 
-export type BusinessField = 'sellerName' | 'representative' | 'address' | 'phone' | 'email';
+export type BusinessField = 'sellerName' | 'representative' | 'address' | 'phone' | 'email' | 'price';
 
 export type NoticeValue =
   | { kind: 'business'; field: BusinessField; value: string | null }
@@ -44,7 +47,7 @@ export function buildLegalNoticeRows(
     { labelKey: 'legalNotice.row.address', value: business('address') },
     { labelKey: 'legalNotice.row.phone', value: business('phone') },
     { labelKey: 'legalNotice.row.email', value: business('email') },
-    { labelKey: 'legalNotice.row.price', value: { kind: 'text', key: 'legalNotice.value.price' } },
+    { labelKey: 'legalNotice.row.price', value: business('price') },
     { labelKey: 'legalNotice.row.extraFees', value: { kind: 'text', key: 'legalNotice.value.extraFees' } },
     { labelKey: 'legalNotice.row.payment', value: { kind: 'text', key: 'legalNotice.value.payment' } },
     { labelKey: 'legalNotice.row.paymentTiming', value: { kind: 'text', key: 'legalNotice.value.paymentTiming' } },
@@ -54,7 +57,11 @@ export function buildLegalNoticeRows(
   ];
 }
 
-/** 未記入の事業者情報。公開前チェック用 */
+/**
+ * 未記入の事業者情報。公開前チェック用。
+ * 1つでも残っていると、表記に「未記入」が出たまま公開されることになる
+ * （本番リリース前に空であることを確かめる）。
+ */
 export function missingBusinessFields(
   info: Record<BusinessField, string | null> = BUSINESS_INFO,
 ): BusinessField[] {

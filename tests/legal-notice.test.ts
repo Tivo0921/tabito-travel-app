@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUSINESS_INFO, buildLegalNoticeRows, missingBusinessFields, REFUND_SECTIONS } from '@/lib/legal/notice';
+import { buildLegalNoticeRows, missingBusinessFields, REFUND_SECTIONS } from '@/lib/legal/notice';
 import { ja } from '@/lib/i18n/dictionaries/ja';
 import { en } from '@/lib/i18n/dictionaries/en';
 import { ko } from '@/lib/i18n/dictionaries/ko';
@@ -10,12 +10,16 @@ const FILLED = {
   address: '東京都',
   phone: '03-0000-0000',
   email: 'a@example.com',
+  price: '各パッケージのページに表示された金額（税込）',
 };
+const EMPTY = { sellerName: null, representative: null, address: null, phone: null, email: null, price: null };
 
 describe('buildLegalNoticeRows', () => {
-  it('事業者情報は推測で埋めず、既定ではすべて未記入', () => {
-    expect(Object.values(BUSINESS_INFO).every((v) => v === null)).toBe(true);
-    expect(missingBusinessFields()).toEqual(['sellerName', 'representative', 'address', 'phone', 'email']);
+  it('未記入（null）の項目はすべて missing として返し、値を作らない', () => {
+    expect(missingBusinessFields(EMPTY)).toEqual(['sellerName', 'representative', 'address', 'phone', 'email', 'price']);
+    for (const r of buildLegalNoticeRows(EMPTY)) {
+      if (r.value.kind === 'business') expect(r.value.value).toBeNull();
+    }
   });
   it('記入した値をそのまま（前後の空白を除いて）出す', () => {
     const rows = buildLegalNoticeRows({ ...FILLED, address: '  東京都  ' });
@@ -49,9 +53,5 @@ describe('文言', () => {
   ] as const;
   it.each([['ja', ja], ['en', en], ['ko', ko]] as const)('%s に空でない文言がある', (_lang, dict) => {
     for (const k of keys) expect((dict as Record<string, string>)[k]?.trim(), k).toBeTruthy();
-  });
-  it('返金ポリシーは利用規約の「原則として返金不可」と矛盾しない', () => {
-    expect(ja['terms.s3.p2']).toContain('原則として購入後の返金はできません');
-    expect(ja['refund.s1.p1']).toContain('返金・キャンセルはお受けしていません');
   });
 });

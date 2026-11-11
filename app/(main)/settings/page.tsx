@@ -95,7 +95,7 @@ export default function SettingsPage() {
                 >
                   <item.icon
                     className={cn(
-                      'w-5 h-5',
+                      'w-5 h-5 flex-shrink-0',
                       item.danger ? 'text-red-400' : 'text-[var(--muted)]'
                     )}
                   />
