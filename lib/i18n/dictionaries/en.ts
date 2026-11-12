@@ -462,6 +462,14 @@ export const en: Record<TranslationKey, string> = {
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count} spots',
   'creator.spotCount_one': '{count} spot',
+  'creator.earnings.title': 'Earnings',
+  'creator.earnings.unpaid': 'Unpaid balance',
+  'creator.earnings.sales': 'Sales',
+  'creator.earnings.gross': 'Gross sales',
+  'creator.earnings.fee': 'Platform fee',
+  'creator.earnings.net': 'Your share',
+  'creator.earnings.note': 'Totals of completed purchases. The fee and your share are fixed at the rate in effect when each purchase was made. Payouts are not recorded yet, so the unpaid balance includes all of your share to date.',
+  'creator.earnings.loadFailed': "Couldn't load your earnings",
 
   // Route / article / etiquette detail
   'route.notFound': 'Course not found',

@@ -10,6 +10,10 @@ import { createServiceClient } from '@/lib/supabase/service';
  *
  * user_id は呼び出し側で決める。Webhook は Checkout 作成時にサーバーが入れた
  * metadata.user_id、verify はそれとログイン中のユーザーの一致を確かめた user.id。
+ *
+ * 収益分配（platform_fee / creator_net / creator_user_id）はここでは渡さない。
+ * INSERT 時に DB のトリガーが購入時点の率と所有者で確定する（#19,
+ * supabase/migrations/20261112000001_purchase_revenue_split.sql）。
  */
 export type RecordPurchaseResult =
   | { ok: true }

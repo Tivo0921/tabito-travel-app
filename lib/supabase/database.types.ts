@@ -917,9 +917,13 @@ export type Database = {
       purchases: {
         Row: {
           amount: number
+          creator_net: number
+          creator_user_id: string | null
           currency: string
           id: string
           package_id: string
+          platform_fee: number
+          platform_fee_rate: number
           purchased_at: string
           status: string
           stripe_payment_intent_id: string | null
@@ -928,9 +932,13 @@ export type Database = {
         }
         Insert: {
           amount: number
+          creator_net?: number
+          creator_user_id?: string | null
           currency?: string
           id?: string
           package_id: string
+          platform_fee?: number
+          platform_fee_rate?: number
           purchased_at?: string
           status?: string
           stripe_payment_intent_id?: string | null
@@ -939,9 +947,13 @@ export type Database = {
         }
         Update: {
           amount?: number
+          creator_net?: number
+          creator_user_id?: string | null
           currency?: string
           id?: string
           package_id?: string
+          platform_fee?: number
+          platform_fee_rate?: number
           purchased_at?: string
           status?: string
           stripe_payment_intent_id?: string | null
@@ -1139,6 +1151,16 @@ export type Database = {
           p_user_limit: number
         }
         Returns: string | null
+      }
+      get_my_creator_earnings: {
+        Args: never
+        Returns: {
+          creator_net: number
+          gross_amount: number
+          platform_fee: number
+          sales_count: number
+          unpaid_net: number
+        }[]
       }
       get_chat_thread_summaries: {
         Args: never

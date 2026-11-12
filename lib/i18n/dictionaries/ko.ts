@@ -462,6 +462,14 @@ export const ko: Record<TranslationKey, string> = {
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count}스폿',
   'creator.spotCount_one': '{count}스폿',
+  'creator.earnings.title': '매출',
+  'creator.earnings.unpaid': '미지급 잔액',
+  'creator.earnings.sales': '판매 수',
+  'creator.earnings.gross': '총매출',
+  'creator.earnings.fee': '수수료',
+  'creator.earnings.net': '내 몫',
+  'creator.earnings.note': '결제가 완료된 구매의 합계입니다. 수수료와 내 몫은 구매 시점의 비율로 확정됩니다. 지급 기록은 아직 반영되지 않으므로 미지급 잔액에는 지금까지의 몫이 모두 포함됩니다.',
+  'creator.earnings.loadFailed': '매출을 불러오지 못했습니다',
 
   // 루트/기사/매너 상세
   'route.notFound': '코스를 찾을 수 없습니다',
