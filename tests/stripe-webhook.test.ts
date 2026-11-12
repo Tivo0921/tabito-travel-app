@@ -182,7 +182,7 @@ describe('POST /api/stripe/webhook: checkout.session.completed', () => {
     expect(res.status).toBe(200);
   });
 
-  it.each(['23503', '22P02'])('再送しても直らないエラー（%s）は 200 でログに残す', async (code) => {
+  it.each(['23503', '22P02', '23514'])('再送しても直らないエラー（%s）は 200 でログに残す', async (code) => {
     upsert.mockResolvedValue({ data: null, error: { code, message: 'x' } });
     const res = await POST(req(event('checkout.session.completed', session())));
     expect(res.status).toBe(200);

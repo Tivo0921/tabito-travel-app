@@ -118,9 +118,24 @@ BEGIN
     RAISE EXCEPTION 'amount update should fail';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
+  BEGIN
+    UPDATE public.purchases SET currency = 'USD' WHERE stripe_session_id = 'cs_rs_1';
+    RAISE EXCEPTION 'currency update should fail';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.purchases SET package_id = '00000000-0000-0000-0000-0000000000d2' WHERE stripe_session_id = 'cs_rs_1';
+    RAISE EXCEPTION 'package_id update should fail';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.purchases SET user_id = '00000000-0000-0000-0000-0000000000f1' WHERE stripe_session_id = 'cs_rs_1';
+    RAISE EXCEPTION 'user_id update should fail';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
   UPDATE public.purchases SET status = 'refunded' WHERE stripe_session_id = 'cs_rs_8';
   ASSERT (SELECT status FROM public.purchases WHERE stripe_session_id = 'cs_rs_8') = 'refunded', 'status update allowed';
-  RAISE NOTICE 'PASS 6: 分配は不変、status は変更可';
+  RAISE NOTICE 'PASS 6: 分配・金額・通貨・パッケージ・購入者は不変、status は変更可';
 END $$;
 
 -- 7. 売上集計: c1 本人には completed かつ受取人 c1 の分だけ

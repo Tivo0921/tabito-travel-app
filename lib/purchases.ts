@@ -26,8 +26,9 @@ export type RecordPurchaseResult =
  * 再送しても結果が変わらない PostgreSQL のエラーコード。
  * 23503: 外部キー違反（Checkout 後にアカウント削除された・パッケージが消えた）
  * 22P02: 型の不正（metadata の user_id / package_id が UUID でない）
+ * 23514: CHECK 違反（収益分配のトリガーが負の金額などを拒否した。#19）
  */
-const PERMANENT_ERROR_CODES = new Set(['23503', '22P02']);
+const PERMANENT_ERROR_CODES = new Set(['23503', '22P02', '23514']);
 
 export function paymentIntentId(session: Stripe.Checkout.Session): string | null {
   const pi = session.payment_intent;

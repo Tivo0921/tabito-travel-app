@@ -14,6 +14,8 @@
 --   platform_fee = round(amount * platform_fee_rate)   … 四捨五入（0.5 は切り上げ）
 --   creator_net  = amount - platform_fee
 --   creator_user_id = 購入時点の packages.guide_id → guides.user_id
+-- 通貨は JPY だけを前提にする（packages.currency は現状すべて JPY。amount は円）。
+-- 集計関数も JPY の行だけを数える。他の通貨を売るときは単位と集計を見直すこと
 -- 一度記録した分配の列は UPDATE で変えられない（返金などは status で表す）。
 
 -- ────────────────────────────────────────────────
@@ -96,7 +98,11 @@ LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 BEGIN
+  -- 金額・通貨・パッケージ・購入者が変わると、確定した分配と食い違う
   IF NEW.amount IS DISTINCT FROM OLD.amount
+     OR NEW.currency IS DISTINCT FROM OLD.currency
+     OR NEW.package_id IS DISTINCT FROM OLD.package_id
+     OR NEW.user_id IS DISTINCT FROM OLD.user_id
      OR NEW.platform_fee_rate IS DISTINCT FROM OLD.platform_fee_rate
      OR NEW.platform_fee IS DISTINCT FROM OLD.platform_fee
      OR NEW.creator_net IS DISTINCT FROM OLD.creator_net
@@ -116,9 +122,10 @@ CREATE TRIGGER purchases_lock_revenue_split
 REVOKE ALL ON FUNCTION public.purchases_set_revenue_split() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.purchases_lock_revenue_split() FROM PUBLIC, anon, authenticated;
 
-CREATE INDEX purchases_creator_completed_idx
-  ON public.purchases (creator_user_id)
-  WHERE status = 'completed';
+-- 部分インデックスにしない。受取人のアカウント削除（ON DELETE SET NULL）は
+-- status を問わず creator_user_id で探すので、部分インデックスだと全件走査になる
+CREATE INDEX purchases_creator_user_id_idx
+  ON public.purchases (creator_user_id) INCLUDE (status);
 
 -- ────────────────────────────────────────────────
 -- 5. クリエイター本人の売上集計
