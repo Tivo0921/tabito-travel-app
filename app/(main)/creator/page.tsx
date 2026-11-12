@@ -19,6 +19,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CTAButton } from '@/components/cta-button';
 import { GuideProfileFields, type GuideProfileDraft } from '@/components/guide-profile-fields';
+import { CreatorEarningsCard } from '@/components/creator-earnings';
 import {
   getMyGuideProfile,
   registerAsGuide,
@@ -364,6 +365,9 @@ export default function CreatorPage() {
               </div>
             ))}
           </div>
+
+          {/* 売上と未払い残高 #19 */}
+          <CreatorEarningsCard />
 
           {/* パッケージ一覧 */}
           <div>

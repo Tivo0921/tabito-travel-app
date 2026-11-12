@@ -466,6 +466,14 @@ export const ja = {
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count}スポット',
   'creator.spotCount_one': '{count}スポット',
+  'creator.earnings.title': '売上',
+  'creator.earnings.unpaid': '未払い残高',
+  'creator.earnings.sales': '販売数',
+  'creator.earnings.gross': '売上合計',
+  'creator.earnings.fee': '手数料',
+  'creator.earnings.net': 'あなたの取り分',
+  'creator.earnings.note': '決済が完了した購入の合計です。手数料と取り分は購入した時点の率で確定しています。振込済みの記録はまだ反映されないため、未払い残高はこれまでの取り分の合計です。目安としてご覧ください。',
+  'creator.earnings.loadFailed': '売上を読み込めませんでした',
 
   // ルート／記事／マナー詳細
   'route.notFound': 'コースが見つかりません',
