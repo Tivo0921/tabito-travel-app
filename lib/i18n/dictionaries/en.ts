@@ -468,7 +468,7 @@ export const en: Record<TranslationKey, string> = {
   'creator.earnings.gross': 'Gross sales',
   'creator.earnings.fee': 'Platform fee',
   'creator.earnings.net': 'Your share',
-  'creator.earnings.note': 'Totals of completed purchases. The fee and your share are fixed at the rate in effect when each purchase was made. Payouts are not recorded yet, so the unpaid balance includes all of your share to date.',
+  'creator.earnings.note': 'Totals of completed purchases. The fee and your share are fixed at the rate in effect when each purchase was made. Payouts are not recorded yet, so the unpaid balance is the total of your share to date. Treat it as an estimate.',
   'creator.earnings.loadFailed': "Couldn't load your earnings",
 
   // Route / article / etiquette detail

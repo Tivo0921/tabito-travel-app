@@ -7,6 +7,9 @@ import { createClient } from '@/lib/supabase/client';
  * 読ませない（購入者の user_id が見えるため）ので、集計値だけを受け取る。
  * 対象は status = 'completed' かつ購入時点の受取人が本人の購入。
  * 振込の記録はまだ無いので、unpaidNet は creatorNet と同じ値になる。
+ * 購入者がアカウントを削除すると、その購入は集計から外れる（purchases が
+ * カスケード削除されるため。マイグレーション 20261112000001 の冒頭を参照）。
+ * 振込の根拠にする前に解消すること。
  */
 export type CreatorEarnings = {
   salesCount: number;

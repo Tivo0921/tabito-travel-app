@@ -468,7 +468,7 @@ export const ko: Record<TranslationKey, string> = {
   'creator.earnings.gross': '총매출',
   'creator.earnings.fee': '수수료',
   'creator.earnings.net': '내 몫',
-  'creator.earnings.note': '결제가 완료된 구매의 합계입니다. 수수료와 내 몫은 구매 시점의 비율로 확정됩니다. 지급 기록은 아직 반영되지 않으므로 미지급 잔액에는 지금까지의 몫이 모두 포함됩니다.',
+  'creator.earnings.note': '결제가 완료된 구매의 합계입니다. 수수료와 내 몫은 구매 시점의 비율로 확정됩니다. 지급 기록은 아직 반영되지 않으므로 미지급 잔액은 지금까지의 몫의 합계입니다. 참고용으로 봐 주세요.',
   'creator.earnings.loadFailed': '매출을 불러오지 못했습니다',
 
   // 루트/기사/매너 상세
