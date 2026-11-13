@@ -1,18 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CreatorPackageInput } from '@/lib/supabase/queries';
+import {
+  rpcSaveResult,
+  updateCreatorPackage,
+  updateCreatorSpot,
+  type CreatorPackageInput,
+} from '@/lib/supabase/queries';
 import type { CreatorSpotInput } from '@/lib/types';
 
 // クリエイターの保存（#22）は1回の RPC で行う。
 // ここでは「RPC に何を渡すか」と「応答をどう解釈するか」を確かめる。
 // SQL 関数そのもの（原子性・RLS）は scripts/test-atomic-creator-save.sql で確かめる。
 
-const rpc = vi.fn();
-const from = vi.fn(() => {
-  throw new Error('保存は rpc 1回で行い、テーブルへ直接書かない');
-});
+const { rpc, from } = vi.hoisted(() => ({
+  rpc: vi.fn(),
+  from: vi.fn(() => {
+    throw new Error('保存は rpc 1回で行い、テーブルへ直接書かない');
+  }),
+}));
 vi.mock('@/lib/supabase/client', () => ({ createClient: () => ({ rpc, from }) }));
-
-const { updateCreatorPackage, updateCreatorSpot, rpcSaveResult } = await import('@/lib/supabase/queries');
 
 const pkgInput: CreatorPackageInput = {
   title: '浅草さんぽ',
