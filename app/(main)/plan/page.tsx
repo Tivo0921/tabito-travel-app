@@ -40,7 +40,7 @@ import {
 } from '@dnd-kit/sortable';
 import { SortableItem } from '@/components/sortable-item';
 import { cn } from '@/lib/utils';
-import { pickPlanAfterLoad } from '@/lib/plan-selection';
+import { mergeLoadedPlans, pickPlanAfterLoad } from '@/lib/plan-selection';
 import { CTAButton } from '@/components/cta-button';
 import {
   getMyPlans,
@@ -318,11 +318,17 @@ export default function PlanPage() {
 
   useEffect(() => {
     getMyPlans().then((data) => {
-      setPlans(data);
-      // 関数形式で「今の」選択を見る。読み込み中に選んだ計画を先頭で上書きしない #62
-      setSelectedPlanId((prev) => pickPlanAfterLoad(prev, data));
+      // 読み込み中に作った計画を一覧から落とさない #62。
+      // マウント時の値ではなく「今の」一覧に足すため、関数形式で更新する
+      setPlans((prev) => mergeLoadedPlans(prev, data));
     });
   }, []);
+
+  // 選択は常に一覧の中の計画を指すようにする。未選択（読み込み直後）なら先頭を選び、
+  // 読み込み中に選んだ・作った計画は先頭で上書きしない #62
+  useEffect(() => {
+    setSelectedPlanId((current) => pickPlanAfterLoad(current, plans));
+  }, [plans]);
 
   useEffect(() => {
     if (selectedPlanId) {
