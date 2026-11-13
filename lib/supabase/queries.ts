@@ -2049,57 +2049,64 @@ export async function createCreatorPackage(
  * 同じ文言（所有権を疑う文言）を出すことになる。
  * - forbidden: 自分のコンテンツではない（RLS が0件で返した）
  * - error:     通信・サーバー側の失敗。やり直せば直りうる
- * - partial:   一部だけ保存された。#22 で RPC 化して解消する
+ * - partial:   一部だけ保存された（プロフィール保存などで使う）。
+ *              パッケージ・スポットの保存は #22 で RPC 化したので返さない
  */
 export type SaveResult = 'ok' | 'forbidden' | 'error' | 'partial';
 
+/**
+ * RPC（save_creator_package / save_creator_spot）の応答を SaveResult にする。
+ * 関数は SECURITY INVOKER で、他人のもの・存在しないものは RLS で0件になり
+ * false が返る。例外のときは関数全体がロールバックされ、何も保存されていない。
+ */
+export function rpcSaveResult(
+  data: unknown,
+  error: { code?: string; message?: string } | null,
+  label: string,
+): Exclude<SaveResult, 'partial'> {
+  if (error) {
+    console.error(`${label} failed:`, error.message);
+    // 42501 は RLS の WITH CHECK 違反や EXECUTE 権限なし（未ログイン）
+    return error.code === '42501' ? 'forbidden' : 'error';
+  }
+  if (data === true) return 'ok';
+  if (data === false) {
+    console.error(`${label} failed: 0 rows affected`);
+    return 'forbidden';
+  }
+  console.error(`${label} failed: unexpected response`, data);
+  return 'error';
+}
+
+/**
+ * パッケージ基本情報の保存。packages と package_translations を
+ * 1トランザクションで書く（#22）。途中で失敗しても一部だけ残らない。
+ */
 export async function updateCreatorPackage(
   packageId: string,
   input: CreatorPackageInput,
-): Promise<SaveResult> {
+): Promise<Exclude<SaveResult, 'partial'>> {
   const supabase = createClient();
-
-  // RLS に弾かれても HTTP 200 / 0件 が返るだけでエラーにならない。
-  // .select() で影響行を受け取り、0件なら失敗として扱う。
-  // これをしないと他人のパッケージを編集して「保存済み ✓」が出てしまう。
-  const { data, error } = await supabase.from('packages').update({
-    area_id: input.areaId,
-    price: input.price,
-    category_id: input.categoryId || null,
-    image_url: input.imageUrl || null,
-    duration_minutes: input.durationMinutes,
-    ...placeColumns('start', input.startPlace),
-    ...placeColumns('end', input.endPlace),
-  }).eq('id', packageId).select('id');
-
-  // 0件 = 自分のものではない。error = 通信・サーバー側の失敗。
-  // どちらも「自分が作成したコンテンツか確認してください」と出すと、
-  // 一時的なネットワークエラーで所有権を疑わせることになる。
-  if (error) {
-    console.error('updateCreatorPackage failed:', error.message);
-    return 'error';
-  }
-  if (!data || data.length === 0) {
-    console.error('updateCreatorPackage failed: 0 rows affected');
-    return 'forbidden';
-  }
-
-  const { error: tError } = await supabase.from('package_translations').upsert({
-    package_id: packageId,
-    language: 'ja',
-    title: input.title,
-    short_description: input.shortDescription,
-    description: input.description,
-  }, { onConflict: 'package_id,language' });
-
-  if (tError) {
-    // packages 側は既にコミット済み。エリア・価格などだけ保存され、
-    // タイトル・説明が古いまま残る。PostgREST では複文トランザクションを
-    // 張れないため、ここは RPC 化しないと解けない。#22
-    console.error('updateCreatorPackage translation failed:', tError.message);
-    return 'partial';
-  }
-  return 'ok';
+  const { data, error } = await supabase.rpc('save_creator_package', {
+    p_package_id: packageId,
+    p_area_id: input.areaId,
+    p_price: input.price,
+    p_category_id: input.categoryId || null,
+    p_image_url: input.imageUrl || null,
+    p_duration_minutes: input.durationMinutes,
+    p_start_place_id: input.startPlace?.place_id ?? null,
+    p_start_place_name: input.startPlace?.name ?? null,
+    p_start_latitude: input.startPlace?.latitude ?? null,
+    p_start_longitude: input.startPlace?.longitude ?? null,
+    p_end_place_id: input.endPlace?.place_id ?? null,
+    p_end_place_name: input.endPlace?.name ?? null,
+    p_end_latitude: input.endPlace?.latitude ?? null,
+    p_end_longitude: input.endPlace?.longitude ?? null,
+    p_title: input.title,
+    p_short_description: input.shortDescription,
+    p_description: input.description,
+  });
+  return rpcSaveResult(data, error, 'updateCreatorPackage');
 }
 
 export async function setPackageStatus(
@@ -2334,14 +2341,11 @@ export async function createCreatorSpot(
 }
 
 /**
- * スポット1件の保存。**原子的ではない。**
+ * スポット1件の保存。spots・spot_translations・japanese_phrases・
+ * japanese_phrase_translations を1トランザクションで書く（#22）。
+ * 途中で失敗すると全体がロールバックされ、フレーズが消えたまま残らない。
  *
- * PostgREST 経由では複文トランザクションを張れないため、途中で失敗すると
- * 「false を返す（＝保存できませんでした と出る）のに spots の UPDATE だけは
- * コミット済み」という状態が残りうる。各書き込みの成否を返すのは
- * 「黙って失敗する」のを止めるためで、部分更新そのものは解消していない。
- *
- * 正攻法は保存全体を SECURITY INVOKER の Postgres 関数にまとめること。#22
+ * package_id でも絞るので、別パッケージのスポットIDを渡すと false になる。
  */
 export async function updateCreatorSpot(
   spotId: string,
@@ -2349,75 +2353,23 @@ export async function updateCreatorSpot(
   input: CreatorSpotInput,
 ): Promise<boolean> {
   const supabase = createClient();
-
-  // RLS に弾かれた更新は error ではなく 0件 で返る。delete と同じく
-  // .select() して実際に書けたかを確認する。void を返していると
-  // 呼び出し側が失敗を検出できず、保存できていないのに閉じてしまう。
-  const { data: updated, error: spotError } = await supabase.from('spots').update({
-    image_url: input.image_url || null,
-    video_url: input.video_url || null,
-    duration_minutes: input.duration_minutes || null,
-    map_url: input.map_url || null,
-    shop_url: input.shop_url || null,
-  }).eq('id', spotId).eq('package_id', packageId).select('id');
-
-  if (spotError || !updated || updated.length === 0) {
-    console.error('updateCreatorSpot spot failed:', spotError?.message ?? '0 rows affected');
-    return false;
-  }
-
-  const { error: transError } = await supabase.from('spot_translations').upsert({
-    spot_id: spotId,
-    language: 'ja',
-    name: input.name,
-    description: input.description,
-    local_tips: input.local_tips.filter(Boolean),
-    etiquette_tips: input.etiquette_tips.filter(Boolean),
-  }, { onConflict: 'spot_id,language' });
-
-  if (transError) {
-    console.error('updateCreatorSpot translation failed:', transError.message);
-    return false;
-  }
-
-  // フレーズは削除してから再挿入。
-  // select してから .in() で消す必要はない。1往復で済むうえ、
-  // こちらはエラーも受け取れる（旧実装は削除の失敗を握り潰していた）。
-  const { error: phraseDeleteError } = await supabase
-    .from('japanese_phrases')
-    .delete()
-    .eq('spot_id', spotId);
-
-  if (phraseDeleteError) {
-    console.error('updateCreatorSpot phrase delete failed:', phraseDeleteError.message);
-    return false;
-  }
-
-  for (let i = 0; i < input.phrases.length; i++) {
-    const phrase = input.phrases[i];
-    if (!phrase.japanese.trim()) continue;
-    const { data: p, error: phraseError } = await supabase
-      .from('japanese_phrases')
-      .insert({ spot_id: spotId, japanese: phrase.japanese, reading: phrase.reading, order: i + 1 })
-      .select()
-      .single();
-    // ここを握り潰すと、削除は通って挿入が落ちた場合に
-    // フレーズが消えたまま「保存されました」になる
-    if (phraseError || !p) {
-      console.error('updateCreatorSpot phrase insert failed:', phraseError?.message ?? 'no row returned');
-      return false;
-    }
-
-    const { error: meaningError } = await supabase.from('japanese_phrase_translations').insert({
-      phrase_id: p.id, language: 'ja', meaning: phrase.meaning, context: null,
-    });
-    if (meaningError) {
-      console.error('updateCreatorSpot phrase translation insert failed:', meaningError.message);
-      return false;
-    }
-  }
-
-  return true;
+  const { data, error } = await supabase.rpc('save_creator_spot', {
+    p_spot_id: spotId,
+    p_package_id: packageId,
+    p_image_url: input.image_url || null,
+    p_video_url: input.video_url || null,
+    p_duration_minutes: input.duration_minutes || null,
+    p_map_url: input.map_url || null,
+    p_shop_url: input.shop_url || null,
+    p_name: input.name,
+    p_description: input.description,
+    p_local_tips: input.local_tips.filter(Boolean),
+    p_etiquette_tips: input.etiquette_tips.filter(Boolean),
+    p_phrases: input.phrases
+      .filter((p) => p.japanese.trim())
+      .map((p) => ({ japanese: p.japanese, reading: p.reading, meaning: p.meaning })),
+  });
+  return rpcSaveResult(data, error, 'updateCreatorSpot') === 'ok';
 }
 
 export async function deleteCreatorSpot(
