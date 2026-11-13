@@ -40,6 +40,7 @@ import {
 } from '@dnd-kit/sortable';
 import { SortableItem } from '@/components/sortable-item';
 import { cn } from '@/lib/utils';
+import { pickPlanAfterLoad } from '@/lib/plan-selection';
 import { CTAButton } from '@/components/cta-button';
 import {
   getMyPlans,
@@ -318,11 +319,9 @@ export default function PlanPage() {
   useEffect(() => {
     getMyPlans().then((data) => {
       setPlans(data);
-      if (data.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(data[0].id);
-      }
+      // 関数形式で「今の」選択を見る。読み込み中に選んだ計画を先頭で上書きしない #62
+      setSelectedPlanId((prev) => pickPlanAfterLoad(prev, data));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
