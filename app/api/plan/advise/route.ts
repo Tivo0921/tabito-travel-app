@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { consumeDailyUsage, readLimit, releaseDailyUsage } from '@/lib/usage-limit';
+import { resolveLocale } from '@/lib/i18n/server';
+import type { Locale } from '@/lib/i18n/locales';
 
 /**
  * 計画について相談する。#16
@@ -20,7 +23,13 @@ const UPSTREAM_TIMEOUT_MS = 30_000;
 /** 行程側にも上限を置く。質問だけ制限しても、アイテムを大量に作れば入力を膨らませられる */
 const MAX_ITEMS = 60;
 
-/** 1ユーザーあたりの呼び出し制限。減速帯であって上限ではない（本当の歯止めは課金側の上限） */
+/** 1ユーザーあたり1日の上限（日本時間 0:00 で切り替え）の既定値。#65 */
+const DEFAULT_DAILY_LIMIT = 10;
+
+/**
+ * 1ユーザーあたりの短時間の呼び出し制限。プロセスのメモリで数える減速帯。
+ * 1日の上限は DB 側（consumeDailyUsage）で数える
+ */
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 5;
 const recentCalls = new Map<string, number[]>();
@@ -51,7 +60,7 @@ const SYSTEM_PROMPT = `あなたは日本旅行のコンシェルジュです。
 - 場所名・パッケージ名は行程に書かれたまま引用する。言い換えも翻訳もしない
 - 移動時間や営業時間の実データは与えられていない。断定せず「確認したほうがよい」と伝える
 - 存在しない店や施設を新しく作らない
-- 各項目は1文。40文字以内。**や##や・などの記号は使わない（アプリ側が整形する）
+- 各項目は1文。{{LENGTH}}。**や##や・などの記号は使わない（アプリ側が整形する）
 - 指摘は具体的に。「余裕がない」ではなく「10:00の次が10:15で移動時間がない」と書く
 - 該当が無い項目は空配列にする。無理に埋めない
 
@@ -66,7 +75,46 @@ schedule について（順番と開始時刻の提案）:
 - 時刻は上から順に前後しないようにする
 - "" は「今の時刻のまま」。時刻を消す手段は無いので、消したいときも "" にしない
 - 「順番はそのままで時刻だけ入れる」も有効な提案。並べ替えを無理に作らない
-- reason は1文、40文字以内`;
+- reason は1文、{{LENGTH}}`;
+
+/**
+ * 回答の言語。UI の表示言語に合わせる。#52 §2-2
+ *
+ * 行程は日本語の場所名を含むことが多く、指示が無いと日本語で返ってくる。
+ * ただし場所名・パッケージ名はクリエイターが書いたまま引用させる
+ * （DB 由来のコンテンツは翻訳しない方針。CLAUDE.md）。
+ *
+ * 長さの上限は言語ごとに変える。英語で「40文字」だと5〜6語しか書けない。
+ */
+const OUTPUT_LANGUAGE: Record<Locale, { instruction: string; length: string }> = {
+  ja: {
+    instruction: '回答の文章（concerns・suggestions・checks・reason）は日本語で書く。',
+    length: '40文字以内',
+  },
+  en: {
+    instruction:
+      '回答の文章（concerns・suggestions・checks・reason）は英語（English）で書く。' +
+      'ただし行程に書かれた場所名・パッケージ名は翻訳もローマ字化もせず、書かれた文字のまま引用する。',
+    length: '英語で80文字（約15語）以内',
+  },
+  ko: {
+    instruction:
+      '回答の文章（concerns・suggestions・checks・reason）は韓国語（한국어）で書く。' +
+      'ただし行程に書かれた場所名・パッケージ名は翻訳もハングル表記もせず、書かれた文字のまま引用する。',
+    length: '韓国語で空白を含めて40文字以内',
+  },
+};
+
+/** UI 言語に合わせた指示を組み立てる。ユーザー入力は混ぜない（input 側に置く） */
+function buildInstructions(locale: Locale): string {
+  const lang = OUTPUT_LANGUAGE[locale] ?? OUTPUT_LANGUAGE.ja;
+  return `${SYSTEM_PROMPT.split('{{LENGTH}}').join(lang.length)}
+
+出力言語:
+- ${lang.instruction}
+- 質問がどの言語で書かれていても、この出力言語で答える
+- 上の例文や、行程の補助的な表記（「時刻未定」「所要時間未設定」「分」など）は日本語だが、出力ではこの出力言語に言い換える。場所名・パッケージ名だけはそのまま引用する`;
+}
 
 type PlanItemRow = {
   id: string;
@@ -282,6 +330,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
   }
 
+  // 1日の上限。OpenAI を呼ぶ直前に数える（入力の不備やキー未設定では消費させない）
+  const usage = await consumeDailyUsage({
+    kind: 'plan_advise',
+    userId: user.id,
+    userLimit: readLimit(process.env.AI_DAILY_LIMIT, DEFAULT_DAILY_LIMIT),
+  });
+  if (!usage.ok) {
+    if (usage.reason === 'limit') {
+      return NextResponse.json({ error: 'daily_limit' }, { status: 429 });
+    }
+    // 数えられないときは通さない。上限を確かめずに課金 API を呼ばない
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+  }
+  const upstreamError = () => NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+  // 上流の失敗は利用者の責任ではないので回数を戻す。ただし戻すのは
+  // **OpenAI に課金されていないと言える失敗だけ**（接続できなかった・エラー応答）。
+  // incomplete・空・JSON でない応答やタイムアウトは生成分が課金されるので戻さない。
+  // 戻すと、質問で incomplete を起こし続けて1日の上限を素通りできてしまう
+  const unbilledUpstreamError = async () => {
+    await releaseDailyUsage({ kind: 'plan_advise', userId: user.id, day: usage.day });
+    return upstreamError();
+  };
+
+  // UI と同じ Cookie から読む。読めなければ resolveLocale が日本語に倒す
+  const locale = await resolveLocale().catch((): Locale => 'ja');
   const itinerary = renderItinerary(plan, usedItems);
   const userContent = q
     ? `${itinerary}\n---\n質問: ${q}`
@@ -294,7 +367,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,
-        instructions: SYSTEM_PROMPT,
+        instructions: buildInstructions(locale),
         input: userContent,
         max_output_tokens: MAX_OUTPUT_TOKENS,
         // 予算には reasoning トークンも含まれる。既定のままだと20件程度の
@@ -337,13 +410,15 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error('plan/advise fetch failed:', e);
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    // タイムアウトはこちらが待つのをやめただけで、OpenAI 側では生成が続き課金される
+    if (e instanceof Error && e.name === 'TimeoutError') return upstreamError();
+    return unbilledUpstreamError();
   }
 
   if (!res.ok) {
     // 上流の本文はキーやクォータの情報を含みうるので、呼び出し側には返さない
     console.error('plan/advise upstream:', res.status, await res.text().catch(() => ''));
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return unbilledUpstreamError();
   }
 
   const body = await res.json().catch(() => null);
@@ -355,7 +430,7 @@ export async function POST(req: NextRequest) {
       'plan/advise: response incomplete:',
       body?.incomplete_details?.reason ?? 'unknown',
     );
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   }
   // Responses API は output_text に本文がまとまる。無ければ output を辿る
   const text: string =
@@ -368,7 +443,7 @@ export async function POST(req: NextRequest) {
 
   if (!text) {
     console.error('plan/advise: empty response', JSON.stringify(body).slice(0, 400));
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   }
 
   let parsed: {
@@ -378,7 +453,7 @@ export async function POST(req: NextRequest) {
     parsed = JSON.parse(text);
   } catch {
     console.error('plan/advise: response was not JSON', text.slice(0, 200));
-    return NextResponse.json({ error: 'upstream_error' }, { status: 502 });
+    return upstreamError();
   }
 
   const asLines = (v: unknown): string[] =>

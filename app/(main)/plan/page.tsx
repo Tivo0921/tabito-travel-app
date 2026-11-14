@@ -40,6 +40,7 @@ import {
 } from '@dnd-kit/sortable';
 import { SortableItem } from '@/components/sortable-item';
 import { cn } from '@/lib/utils';
+import { mergeLoadedPlans, pickPlanAfterLoad } from '@/lib/plan-selection';
 import { CTAButton } from '@/components/cta-button';
 import {
   getMyPlans,
@@ -273,7 +274,7 @@ export default function PlanPage() {
   const adviceSnapshot = useRef<string | null>(null);
   const aiInputRef = useRef<HTMLInputElement>(null);
   const [askingAi, setAskingAi] = useState(false);
-  const [aiError, setAiError] = useState<'empty' | 'rate' | 'unavailable' | 'failed' | null>(null);
+  const [aiError, setAiError] = useState<'empty' | 'rate' | 'daily' | 'unavailable' | 'failed' | null>(null);
 
   // 新規プランモーダル（2ステップ）
   const [showNewPlan, setShowNewPlan] = useState(false);
@@ -317,13 +318,17 @@ export default function PlanPage() {
 
   useEffect(() => {
     getMyPlans().then((data) => {
-      setPlans(data);
-      if (data.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(data[0].id);
-      }
+      // 読み込み中に作った計画を一覧から落とさない #62。
+      // マウント時の値ではなく「今の」一覧に足すため、関数形式で更新する
+      setPlans((prev) => mergeLoadedPlans(prev, data));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 選択は常に一覧の中の計画を指すようにする。未選択（読み込み直後）なら先頭を選び、
+  // 読み込み中に選んだ・作った計画は先頭で上書きしない #62
+  useEffect(() => {
+    setSelectedPlanId((current) => pickPlanAfterLoad(current, plans));
+  }, [plans]);
 
   useEffect(() => {
     if (selectedPlanId) {
@@ -661,7 +666,12 @@ export default function PlanPage() {
         body: JSON.stringify({ planId: selectedPlanId, question: aiPrompt.trim() }),
       });
       if (res.status === 400) { setAiError('empty'); return; }
-      if (res.status === 429) { setAiError('rate'); return; }
+      if (res.status === 429) {
+        // daily_limit は1日の上限（日本時間 0:00 まで通らない）。それ以外は短時間の連打
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setAiError(data?.error === 'daily_limit' ? 'daily' : 'rate');
+        return;
+      }
       if (res.status === 503) { setAiError('unavailable'); return; }
       if (!res.ok) { setAiError('failed'); return; }
       const data = (await res.json()) as PlanAdvice;
@@ -915,6 +925,7 @@ export default function PlanPage() {
               {t(
                 aiError === 'empty' ? 'plan.ai.emptyPlan'
                 : aiError === 'rate' ? 'plan.ai.rateLimited'
+                : aiError === 'daily' ? 'plan.ai.dailyLimit'
                 : aiError === 'unavailable' ? 'plan.ai.unavailable'
                 : 'plan.ai.failed'
               )}
