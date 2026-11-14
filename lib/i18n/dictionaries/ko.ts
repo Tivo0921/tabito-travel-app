@@ -457,7 +457,6 @@ export const ko: Record<TranslationKey, string> = {
   'pkgEdit.notFound': '이 패키지는 편집할 수 없습니다. 본인이 만든 것인지 확인해 주세요',
   'pkgEdit.saveFailed': '저장하지 못했습니다. 본인이 만든 콘텐츠인지 확인해 주세요',
   'pkgEdit.saveError': '저장하지 못했습니다. 연결 상태를 확인하고 다시 시도해 주세요',
-  'pkgEdit.savePartial': '일부만 저장되었습니다. 다시 저장해 주세요',
   'creator.confirmDelete': '이 패키지를 삭제할까요?',
   'creator.meta': '{area} · {spots} · {price}',
   'creator.spotCount': '{count}스폿',

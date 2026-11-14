@@ -1140,6 +1140,45 @@ export type Database = {
         }
         Returns: string | null
       }
+      save_creator_package: {
+        Args: {
+          p_area_id: string
+          p_category_id: string | null
+          p_description: string
+          p_duration_minutes: number | null
+          p_end_latitude: number | null
+          p_end_longitude: number | null
+          p_end_place_id: string | null
+          p_end_place_name: string | null
+          p_image_url: string | null
+          p_package_id: string
+          p_price: number
+          p_short_description: string
+          p_start_latitude: number | null
+          p_start_longitude: number | null
+          p_start_place_id: string | null
+          p_start_place_name: string | null
+          p_title: string
+        }
+        Returns: boolean
+      }
+      save_creator_spot: {
+        Args: {
+          p_description: string
+          p_duration_minutes: number | null
+          p_etiquette_tips: string[]
+          p_image_url: string | null
+          p_local_tips: string[]
+          p_map_url: string | null
+          p_name: string
+          p_package_id: string
+          p_phrases: Json
+          p_shop_url: string | null
+          p_spot_id: string
+          p_video_url: string | null
+        }
+        Returns: boolean
+      }
       get_chat_thread_summaries: {
         Args: never
         Returns: {
