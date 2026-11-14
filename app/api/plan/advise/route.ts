@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { consumeDailyUsage, readLimit, releaseDailyUsage } from '@/lib/usage-limit';
+import { resolveLocale } from '@/lib/i18n/server';
+import type { Locale } from '@/lib/i18n/locales';
 
 /**
  * 計画について相談する。#16
@@ -58,7 +60,7 @@ const SYSTEM_PROMPT = `あなたは日本旅行のコンシェルジュです。
 - 場所名・パッケージ名は行程に書かれたまま引用する。言い換えも翻訳もしない
 - 移動時間や営業時間の実データは与えられていない。断定せず「確認したほうがよい」と伝える
 - 存在しない店や施設を新しく作らない
-- 各項目は1文。40文字以内。**や##や・などの記号は使わない（アプリ側が整形する）
+- 各項目は1文。{{LENGTH}}。**や##や・などの記号は使わない（アプリ側が整形する）
 - 指摘は具体的に。「余裕がない」ではなく「10:00の次が10:15で移動時間がない」と書く
 - 該当が無い項目は空配列にする。無理に埋めない
 
@@ -73,7 +75,45 @@ schedule について（順番と開始時刻の提案）:
 - 時刻は上から順に前後しないようにする
 - "" は「今の時刻のまま」。時刻を消す手段は無いので、消したいときも "" にしない
 - 「順番はそのままで時刻だけ入れる」も有効な提案。並べ替えを無理に作らない
-- reason は1文、40文字以内`;
+- reason は1文、{{LENGTH}}`;
+
+/**
+ * 回答の言語。UI の表示言語に合わせる。#52 §2-2
+ *
+ * 行程は日本語の場所名を含むことが多く、指示が無いと日本語で返ってくる。
+ * ただし場所名・パッケージ名はクリエイターが書いたまま引用させる
+ * （DB 由来のコンテンツは翻訳しない方針。CLAUDE.md）。
+ *
+ * 長さの上限は言語ごとに変える。英語で「40文字」だと5〜6語しか書けない。
+ */
+const OUTPUT_LANGUAGE: Record<Locale, { instruction: string; length: string }> = {
+  ja: {
+    instruction: '回答の文章（concerns・suggestions・checks・reason）は日本語で書く。',
+    length: '40文字以内',
+  },
+  en: {
+    instruction:
+      '回答の文章（concerns・suggestions・checks・reason）は英語（English）で書く。' +
+      'ただし行程に書かれた場所名・パッケージ名は翻訳もローマ字化もせず、書かれた文字のまま引用する。',
+    length: '英語で80文字（約15語）以内',
+  },
+  ko: {
+    instruction:
+      '回答の文章（concerns・suggestions・checks・reason）は韓国語（한국어）で書く。' +
+      'ただし行程に書かれた場所名・パッケージ名は翻訳もハングル表記もせず、書かれた文字のまま引用する。',
+    length: '韓国語で40文字以内',
+  },
+};
+
+/** UI 言語に合わせた指示を組み立てる。ユーザー入力は混ぜない（input 側に置く） */
+function buildInstructions(locale: Locale): string {
+  const lang = OUTPUT_LANGUAGE[locale] ?? OUTPUT_LANGUAGE.ja;
+  return `${SYSTEM_PROMPT.split('{{LENGTH}}').join(lang.length)}
+
+出力言語:
+- ${lang.instruction}
+- 質問がどの言語で書かれていても、この出力言語で答える`;
+}
 
 type PlanItemRow = {
   id: string;
@@ -312,6 +352,8 @@ export async function POST(req: NextRequest) {
     return upstreamError();
   };
 
+  // UI と同じ Cookie から読む。読めなければ resolveLocale が日本語に倒す
+  const locale = await resolveLocale().catch((): Locale => 'ja');
   const itinerary = renderItinerary(plan, usedItems);
   const userContent = q
     ? `${itinerary}\n---\n質問: ${q}`
@@ -324,7 +366,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: MODEL,
-        instructions: SYSTEM_PROMPT,
+        instructions: buildInstructions(locale),
         input: userContent,
         max_output_tokens: MAX_OUTPUT_TOKENS,
         // 予算には reasoning トークンも含まれる。既定のままだと20件程度の
