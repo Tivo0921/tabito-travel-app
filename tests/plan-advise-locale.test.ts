@@ -58,7 +58,7 @@ describe('POST /api/plan/advise の出力言語（#52 §2-2）', () => {
     const { instructions } = await sentInstructions();
     expect(instructions).toContain('日本語で書く');
     expect(instructions).toContain('40文字以内');
-    expect(instructions).not.toContain('英語');
+    expect(instructions).not.toContain('英語（English）で書く');
     expect(instructions).not.toContain('{{LENGTH}}');
   });
 
@@ -67,7 +67,11 @@ describe('POST /api/plan/advise の出力言語（#52 §2-2）', () => {
     const { instructions } = await sentInstructions();
     expect(instructions).toContain('英語（English）で書く');
     expect(instructions).toContain('書かれた文字のまま引用する');
-    expect(instructions).toContain('英語で80文字');
+    // 長さの指定は2か所とも英語用に置き換わる
+    expect(instructions.split('英語で80文字').length - 1).toBe(2);
+    expect(instructions).not.toContain('。40文字以内');
+    // 日本語の補助表記を出力言語に言い換える指示がある
+    expect(instructions).toContain('出力言語に言い換える');
     expect(instructions).not.toContain('{{LENGTH}}');
   });
 
@@ -75,6 +79,7 @@ describe('POST /api/plan/advise の出力言語（#52 §2-2）', () => {
     resolveLocale.mockResolvedValue('ko');
     const { instructions } = await sentInstructions();
     expect(instructions).toContain('韓国語（한국어）で書く');
+    expect(instructions.split('韓国語で空白を含めて40文字以内').length - 1).toBe(2);
     expect(instructions).toContain('書かれた文字のまま引用する');
     expect(instructions).not.toContain('{{LENGTH}}');
   });

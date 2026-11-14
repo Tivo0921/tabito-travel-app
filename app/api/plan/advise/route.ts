@@ -101,7 +101,7 @@ const OUTPUT_LANGUAGE: Record<Locale, { instruction: string; length: string }> =
     instruction:
       '回答の文章（concerns・suggestions・checks・reason）は韓国語（한국어）で書く。' +
       'ただし行程に書かれた場所名・パッケージ名は翻訳もハングル表記もせず、書かれた文字のまま引用する。',
-    length: '韓国語で40文字以内',
+    length: '韓国語で空白を含めて40文字以内',
   },
 };
 
@@ -112,7 +112,8 @@ function buildInstructions(locale: Locale): string {
 
 出力言語:
 - ${lang.instruction}
-- 質問がどの言語で書かれていても、この出力言語で答える`;
+- 質問がどの言語で書かれていても、この出力言語で答える
+- 上の例文や、行程の補助的な表記（「時刻未定」「所要時間未設定」「分」など）は日本語だが、出力ではこの出力言語に言い換える。場所名・パッケージ名だけはそのまま引用する`;
 }
 
 type PlanItemRow = {
