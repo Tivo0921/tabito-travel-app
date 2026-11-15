@@ -41,3 +41,12 @@ export function normalizeGuideLanguages(values: readonly unknown[] | null | unde
   return result;
 }
 
+/**
+ * 編集画面の初期値。旧データの表示名もトグルに反映させる。
+ * 有効な言語が1つも無い行は ['ja'] で開く（「最後の1つは外させない」ガードがあり、
+ * 0個で開くと何も選べないまま保存できなくなるため。#48 からの挙動）
+ */
+export function guideLanguagesForEditor(values: readonly unknown[] | null | undefined): Locale[] {
+  const known = normalizeGuideLanguages(values);
+  return known.length > 0 ? known : ['ja'];
+}

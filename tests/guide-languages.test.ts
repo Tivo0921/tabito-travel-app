@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { normalizeGuideLanguages } from '@/lib/guide-languages';
+import { guideLanguagesForEditor, normalizeGuideLanguages } from '@/lib/guide-languages';
 import { registerAsGuide, updateMyGuideProfile } from '@/lib/supabase/queries';
 
 describe('normalizeGuideLanguages (#47)', () => {
@@ -40,6 +40,18 @@ describe('normalizeGuideLanguages (#47)', () => {
   });
 });
 
+describe('guideLanguagesForEditor (#47 の症状)', () => {
+  it('COCODOCO の旧データ（日本語・英語の表示名）は ja と en が選ばれた状態で開く', () => {
+    expect(guideLanguagesForEditor(['日本語', '英語'])).toEqual(['ja', 'en']);
+  });
+
+  it('有効な言語が無い・空の行は ja で開く', () => {
+    expect(guideLanguagesForEditor(['中文'])).toEqual(['ja']);
+    expect(guideLanguagesForEditor([])).toEqual(['ja']);
+    expect(guideLanguagesForEditor(null)).toEqual(['ja']);
+  });
+});
+
 // ── 保存経路: DB に表示名を書かない ──────────────────────────────
 
 type Call = { table: string; op: string; payload: unknown };
@@ -53,10 +65,12 @@ function fakeClient() {
     },
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
+      // このチェーンで呼ばれた書き込み操作。応答はチェーンごとに決める
+      let mine: Call | undefined;
       const result = () => {
-        if (table === 'guides' && calls.at(-1)?.op === 'update') return { data: [{ id: 'g1' }], error: null };
-        if (table === 'guides' && calls.at(-1)?.op === 'insert')
-          return { data: { id: 'g1', ...(calls.at(-1)!.payload as object) }, error: null };
+        if (table === 'guides' && mine?.op === 'update') return { data: [{ id: 'g1' }], error: null };
+        if (table === 'guides' && mine?.op === 'insert')
+          return { data: { id: 'g1', ...(mine.payload as object) }, error: null };
         // getMyGuideProfile: 未登録
         if (table === 'guides') return { data: [], error: null };
         return { data: null, error: null };
@@ -64,7 +78,8 @@ function fakeClient() {
       for (const m of ['select', 'eq', 'order', 'limit']) chain[m] = () => chain;
       for (const op of ['update', 'insert', 'upsert', 'delete']) {
         chain[op] = (payload: unknown) => {
-          calls.push({ table, op, payload });
+          mine = { table, op, payload };
+          calls.push(mine);
           return chain;
         };
       }
@@ -115,9 +130,18 @@ describe('registerAsGuide の言語の正規化 (#47)', () => {
   });
 
   it('コード以外を落とし、重複を除いて insert する', async () => {
-    await registerAsGuide('A', '東京', '', ['ja', 'xx', 'JA', 'ko']);
+    const g = await registerAsGuide('A', '東京', '', ['ja', 'xx', 'JA', 'ko']);
+    expect(g).not.toBeNull();
+    expect(g?.languages).toEqual(['ja', 'ko']);
     const ins = calls.find((c) => c.table === 'guides' && c.op === 'insert');
     expect((ins?.payload as { languages: string[] }).languages).toEqual(['ja', 'ko']);
+  });
+
+  it('表示名で渡されてもコードで insert する（英語を落とさない）', async () => {
+    const g = await registerAsGuide('A', '東京', '', ['日本語', '英語']);
+    expect(g?.languages).toEqual(['ja', 'en']);
+    const ins = calls.find((c) => c.table === 'guides' && c.op === 'insert');
+    expect((ins?.payload as { languages: string[] }).languages).toEqual(['ja', 'en']);
   });
 
   it('有効な言語が1つも無ければ作らない', async () => {
