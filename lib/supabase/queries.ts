@@ -1,4 +1,5 @@
 import { createClient } from './client';
+import { normalizeGuideLanguages } from '../guide-languages';
 import type {
   Guide,
   Package,
@@ -1730,7 +1731,8 @@ export async function registerAsGuide(
 
   // 0個は誰にも案内できない状態になるので作らせない。
   // updateMyGuideProfile 側にも同じ境界があり、片方だけ抜けていた
-  const normalizedLanguages = languages.filter(Boolean);
+  // 言語コード以外（'日本語' などの表示名）を DB に入れない #47
+  const normalizedLanguages = normalizeGuideLanguages(languages);
   if (normalizedLanguages.length === 0) return null;
 
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
@@ -1838,8 +1840,9 @@ export async function updateMyGuideProfile(
   const location = input.location.trim();
 
   // 0個は誰にも案内できない状態になるので保存しない。UI 側でも
-  // 最後の1つを外せないようにしているが、境界はここで決める
-  const languages = input.languages.filter(Boolean);
+  // 最後の1つを外せないようにしているが、境界はここで決める。
+  // 言語コード以外（'日本語' などの表示名）は読み替えるか落とす #47
+  const languages = normalizeGuideLanguages(input.languages);
   if (languages.length === 0) return 'error';
 
   const { data, error } = await supabase

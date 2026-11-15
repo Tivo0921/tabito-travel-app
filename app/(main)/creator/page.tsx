@@ -30,7 +30,7 @@ import {
 } from '@/lib/supabase/queries';
 import type { Guide } from '@/lib/types';
 import { useT, useLocale } from '@/lib/i18n/provider';
-import { isLocale } from '@/lib/i18n/locales';
+import { normalizeGuideLanguages } from '@/lib/guide-languages';
 import { formatPrice } from '@/lib/i18n/format';
 
 type CreatorPackage = {
@@ -127,8 +127,9 @@ export default function CreatorPage() {
     // 入っている行がある（#47）。そのまま渡すとどのトグルとも一致せず
     // 全て未選択で開き、1つ押すと ['日本語','英語','ja'] と混ざってしまう。
     // 「最後の1つは外させない」ガードがあるので手で消しきれない。
-    // 知らない値は落とし、保存すれば正規化される形にする。
-    const known = guide.languages.filter(isLocale);
+    // 既知の表示名はコードに読み替え（'英語' → 'en'）、知らない値は落とす。
+    // 読み替えずに落とすと、保存した瞬間に案内言語が減る。
+    const known = normalizeGuideLanguages(guide.languages);
     setEditDraft({
       name: guide.name,
       location: guide.location,
