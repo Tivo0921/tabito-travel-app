@@ -56,8 +56,38 @@ type GoogleGlobal = {
 };
 
 const CALLBACK_NAME = '__tabitoGoogleMapsReady';
+/** スクリプトは読めたのにコールバックが来ない（拡張機能が止めた等）ときに諦めるまでの時間 */
+const LOAD_TIMEOUT_MS = 15_000;
 
 let loading: Promise<GoogleMapsApi> | null = null;
+
+/**
+ * キーが無効・リファラ制限で拒否されたか。Google はスクリプト1回の読み込みにつき
+ * 1回だけ gm_authFailure を呼ぶので、画面を出し直しても覚えておけるよう
+ * モジュールに持つ。拒否されたキーはページを読み直すまで使えない
+ */
+let authFailed = false;
+const authFailureListeners = new Set<() => void>();
+
+export function isMapsAuthFailed(): boolean {
+  return authFailed;
+}
+
+/** 認証失敗の通知を受ける。戻り値で解除する */
+export function onMapsAuthFailure(listener: () => void): () => void {
+  authFailureListeners.add(listener);
+  return () => {
+    authFailureListeners.delete(listener);
+  };
+}
+
+function installAuthFailureHandler() {
+  const w = window as unknown as { gm_authFailure?: () => void };
+  w.gm_authFailure = () => {
+    authFailed = true;
+    authFailureListeners.forEach((l) => l());
+  };
+}
 
 /** ブラウザ公開キー。未設定・空白だけなら null（地図モードは「利用できません」を出す） */
 export function getBrowserMapsKey(): string | null {
@@ -76,10 +106,12 @@ export function buildMapsScriptUrl(key: string): string {
 }
 
 export function loadGoogleMaps(key: string): Promise<GoogleMapsApi> {
+  if (authFailed) return Promise.reject(new Error('Maps JavaScript API rejected the key'));
   if (loading) return loading;
 
   loading = new Promise<GoogleMapsApi>((resolve, reject) => {
     const w = window as unknown as Record<string, unknown> & { google?: GoogleGlobal };
+    installAuthFailureHandler();
 
     const finish = async () => {
       try {
@@ -104,14 +136,21 @@ export function loadGoogleMaps(key: string): Promise<GoogleMapsApi> {
       return;
     }
 
+    const script = document.createElement('script');
+    const timer = window.setTimeout(() => {
+      script.remove();
+      reject(new Error('timed out loading Maps JavaScript API'));
+    }, LOAD_TIMEOUT_MS);
+
     w[CALLBACK_NAME] = () => {
+      window.clearTimeout(timer);
       void finish();
     };
 
-    const script = document.createElement('script');
     script.src = buildMapsScriptUrl(key);
     script.async = true;
     script.onerror = () => {
+      window.clearTimeout(timer);
       script.remove();
       reject(new Error('failed to load Maps JavaScript API'));
     };

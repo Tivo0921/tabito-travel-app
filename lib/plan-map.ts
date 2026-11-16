@@ -33,11 +33,12 @@ export interface PlanMapMarker {
 export interface PlanMapData {
   markers: PlanMapMarker[];
   /**
-   * 地図に出せない予定の件数。黙って消すと「計画から消えた」と誤解されるため、
-   * 件数を画面に出す。数えるのは次のもの:
+   * 地図に出せないパッケージ由来の予定の件数。黙って消すと「計画から消えた」と
+   * 誤解されるため、件数を画面に出す。数えるのは次のもの:
    * - 地点が未設定のパッケージ（展開済みのスポット行もパッケージ単位で1件）
    * - パッケージが削除されて中身を引けない行
-   * - パッケージに由来しない予定（食事・移動・手入力のスポットなど）
+   * 食事・移動・手入力の予定は、そもそも地図に出す対象ではないので数えない。
+   * 数えるとほぼ毎日警告が出て、地点未設定のパッケージに気づけなくなる
    */
   unplaceableCount: number;
 }
@@ -77,8 +78,8 @@ export function buildPlanMapData(items: PlanItem[]): PlanMapData {
   for (const item of items) {
     const pkg = item.package;
     if (!pkg) {
-      // パッケージ由来でない予定、または削除済みパッケージの行
-      unplaceableCount += 1;
+      // 削除済みパッケージの行（ブロック、または展開したスポット行）だけ数える
+      if (item.item_type === 'package' || item.source === 'package') unplaceableCount += 1;
       continue;
     }
     // 同じパッケージの2行目以降（展開したスポット行）は、1件目で扱い済み

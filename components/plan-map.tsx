@@ -8,7 +8,9 @@ import { useT } from '@/lib/i18n/provider';
 import type { TranslationKey } from '@/lib/i18n/dictionaries/ja';
 import {
   getBrowserMapsKey,
+  isMapsAuthFailed,
   loadGoogleMaps,
+  onMapsAuthFailure,
   type GoogleMap,
   type GoogleMapsApi,
   type GoogleMarker,
@@ -42,21 +44,42 @@ export function PlanMap({ data, visible }: { data: PlanMapData; visible: boolean
   const mapRef = useRef<GoogleMap | null>(null);
   const apiRef = useRef<GoogleMapsApi | null>(null);
   const markerRefs = useRef<GoogleMarker[]>([]);
+  const listenerRefs = useRef<{ remove(): void }[]>([]);
   const [status, setStatus] = useState<Status>('loading');
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 読み込みに失敗したあと、地図モードを開き直したらやり直すためのカウンタ
+  const [attempt, setAttempt] = useState(0);
+  // 最後に範囲を合わせたマーカー。タイムラインから戻っただけなら、
+  // ユーザーが動かした位置・拡大率をそのまま残す
+  const fittedMarkersRef = useRef<PlanMapData['markers'] | null>(null);
+
+  const clearMarkers = () => {
+    listenerRefs.current.forEach((l) => l.remove());
+    listenerRefs.current = [];
+    markerRefs.current.forEach((m) => m.setMap(null));
+    markerRefs.current = [];
+  };
 
   // 地図本体は1回だけ作る。Day を切り替えてもマーカーだけ差し替える
   // （地図の作り直しは Maps JavaScript API の課金対象の読み込みになるため）
   useEffect(() => {
     if (!apiKey) return;
+    // 一度作った地図は使い続ける（再試行で作り直さない）
+    if (mapRef.current) return;
     let cancelled = false;
 
-    // キーが無効・リファラ制限で拒否されたときに Google が呼ぶ
-    const w = window as unknown as { gm_authFailure?: () => void };
-    w.gm_authFailure = () => {
+    // キーが無効・リファラ制限で拒否されたとき。Google の「問題が発生しました」の
+    // 地図ではなく、こちらの文言を出す
+    if (isMapsAuthFailed()) {
+      setStatus('error');
+      return;
+    }
+    const unsubscribe = onMapsAuthFailure(() => {
       if (!cancelled) setStatus('error');
-    };
+    });
 
+    setStatus('loading');
     loadGoogleMaps(apiKey)
       .then((api) => {
         if (cancelled || !containerRef.current) return;
@@ -73,6 +96,7 @@ export function PlanMap({ data, visible }: { data: PlanMapData; visible: boolean
           // スクロール中に地図が勝手に動かないよう、モバイルは2本指で操作する
           gestureHandling: 'cooperative',
         });
+        fittedMarkersRef.current = null;
         setStatus('ready');
       })
       .catch(() => {
@@ -81,11 +105,26 @@ export function PlanMap({ data, visible }: { data: PlanMapData; visible: boolean
 
     return () => {
       cancelled = true;
-      markerRefs.current.forEach((m) => m.setMap(null));
-      markerRefs.current = [];
-      mapRef.current = null;
+      unsubscribe();
     };
-  }, [apiKey]);
+  }, [apiKey, attempt]);
+
+  // 失敗したまま地図モードを開き直したら、読み込みをやり直す
+  // （一時的な通信エラーで、ページを離れるまで地図が出ないままにしない）
+  useEffect(() => {
+    if (visible && status === 'error' && !isMapsAuthFailed()) {
+      setAttempt((n) => n + 1);
+    }
+    // status を依存に入れると、失敗した直後に無限に再試行する。開き直したときだけ動かす
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  // アンマウント時にマーカーと地図を捨てる
+  useEffect(() => () => {
+    clearMarkers();
+    mapRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // マーカーの差し替え
   useEffect(() => {
@@ -93,11 +132,11 @@ export function PlanMap({ data, visible }: { data: PlanMapData; visible: boolean
     const map = mapRef.current;
     // 非表示（幅0）の間に範囲を合わせても正しく収まらないので、表示されてから描く
     if (status !== 'ready' || !api || !map || !visible) return;
+    // タイムラインから戻っただけ（マーカーが前回と同じ）なら何もしない
+    if (fittedMarkersRef.current === data.markers) return;
+    fittedMarkersRef.current = data.markers;
 
-    markerRefs.current.forEach((m) => m.setMap(null));
-    markerRefs.current = [];
-
-    const listeners: { remove(): void }[] = [];
+    clearMarkers();
     data.markers.forEach((marker, index) => {
       const m = new api.Marker({
         position: { lat: marker.lat, lng: marker.lng },
@@ -106,7 +145,7 @@ export function PlanMap({ data, visible }: { data: PlanMapData; visible: boolean
         // 一覧と対応がつくよう、出てきた順の番号を付ける
         label: String(index + 1),
       });
-      listeners.push(m.addListener('click', () => setSelectedId(marker.id)));
+      listenerRefs.current.push(m.addListener('click', () => setSelectedId(marker.id)));
       markerRefs.current.push(m);
     });
 
@@ -117,8 +156,9 @@ export function PlanMap({ data, visible }: { data: PlanMapData; visible: boolean
       map.setCenter({ lat: data.markers[0].lat, lng: data.markers[0].lng });
       map.setZoom(SINGLE_MARKER_ZOOM);
     }
-
-    return () => listeners.forEach((l) => l.remove());
+    // ここで後片付けを返さない。タイムラインへの切り替えで effect が再実行されると、
+    // マーカーを残したままクリックの登録だけが外れてしまうため。
+    // 差し替え時（clearMarkers）とアンマウント時に外す
   }, [status, data.markers, visible]);
 
   // Day を切り替えて選択中のマーカーが無くなったら、カードを閉じる

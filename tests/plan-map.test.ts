@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildPlanMapData, planMapBounds } from '@/lib/plan-map';
 import { buildMapsScriptUrl, getBrowserMapsKey } from '@/lib/google-maps-loader';
 import { fakeSupabase } from './helpers/supabase-mock';
-import { getPlanItems } from '@/lib/supabase/queries';
+import { expandPackageIntoPlan, getPlanItems, getPurchasedPackagesForPlan } from '@/lib/supabase/queries';
 import type { PackagePlace, PlanItem, PlanItemPackage } from '@/lib/types';
 
 let fakeClient: () => unknown = () => fakeSupabase({ userId: null, tables: {} });
@@ -141,14 +141,23 @@ describe('buildPlanMapData (#30)', () => {
     expect(buildPlanMapData(rows).unplaceableCount).toBe(1);
   });
 
-  it('手入力の予定と、削除されたパッケージの行（package が無い）は件数に数える', () => {
+  it('手入力の予定は数えない。削除・非公開でパッケージを引けない行は数える', () => {
     const data = buildPlanMapData([
       item({ item_type: 'meal' }),
+      item({ item_type: 'spot', source: 'manual' }),
       item({ item_type: 'package', package_id: null, source: 'package' }),
+      item({ item_type: 'spot', package_id: 'hidden', source: 'package' }),
       pkgItem(pkg('a', { start_place: kyoto, end_place: kyoto })),
     ]);
     expect(data.markers).toHaveLength(1);
     expect(data.unplaceableCount).toBe(2);
+  });
+
+  it('手入力の予定だけの日は、警告の件数も0', () => {
+    expect(buildPlanMapData([item({ item_type: 'meal' }), item({ item_type: 'transport' })])).toEqual({
+      markers: [],
+      unplaceableCount: 0,
+    });
   });
 
   it('マーカーの id は座標から作り、同じ入力なら同じ id になる', () => {
@@ -295,5 +304,64 @@ describe('getPlanItems の地点・概要 (#30)', () => {
     expect(it0.package?.summary).toBe('');
     expect(it0.package?.start_place).toBeNull();
     expect(it0.package?.end_place).toBeNull();
+  });
+});
+
+describe('計画に置いた直後・展開した直後も地図に出る (#30)', () => {
+  const pkgRow = {
+    id: 'a',
+    image_url: null,
+    spot_count: 1,
+    duration_minutes: 60,
+    areas: { name: '浅草' },
+    package_translations: [{ title: 'タイトル', short_description: '概要' }],
+    guides: { guide_translations: [{ name: 'ガイド' }] },
+    start_place_id: 'p1', start_place_name: '浅草寺', start_latitude: 35.714765, start_longitude: 139.796655,
+    end_place_id: 'p1', end_place_name: '浅草寺', end_latitude: 35.714765, end_longitude: 139.796655,
+  };
+
+  it('購入済みパッケージの一覧にも地点と概要が載る（追加した行がそのまま地図に出る）', async () => {
+    fakeClient = () =>
+      fakeSupabase({ userId: 'u1', tables: { purchases: { data: [{ package_id: 'a', packages: pkgRow }], error: null } } });
+    const [p] = await getPurchasedPackagesForPlan();
+    expect(p.summary).toBe('概要');
+    expect(p.start_place?.name).toBe('浅草寺');
+    const data = buildPlanMapData([pkgItem(p)]);
+    expect(data.markers).toHaveLength(1);
+    expect(data.unplaceableCount).toBe(0);
+  });
+
+  it('展開して返る行に、展開元のパッケージ情報が載る', async () => {
+    const p = pkg('a', { start_place: asakusa, end_place: ueno });
+    const block = pkgItem(p, { id: 'block', order: 3 });
+    const spotRow = {
+      id: 's1', plan_id: 'plan', day: 1, order: 3, item_type: 'spot', title: 'スポット',
+      scheduled_time: null, duration_minutes: 30, spot_id: 'spot1', manner_tip_id: null,
+      package_id: 'a', source: 'package', note: null,
+    };
+    // spots の取得と plan_items の insert/delete を同じ偽テーブルで返す
+    fakeClient = () => {
+      const client = fakeSupabase({
+        userId: 'u1',
+        tables: {
+          spots: { data: [{ id: 'spot1', name: 'スポット', duration_minutes: 30 }], error: null },
+          plan_items: { data: [spotRow], error: null },
+        },
+      });
+      const from = client.from;
+      client.from = vi.fn((table: string) => {
+        const chain = from(table) as Record<string, unknown>;
+        chain.insert = () => chain;
+        chain.delete = () => chain;
+        chain.in = () => chain;
+        return chain;
+      }) as typeof client.from;
+      return client;
+    };
+    const result = await expandPackageIntoPlan(block);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items[0].package).toBe(p);
+    expect(buildPlanMapData(result.items).markers).toHaveLength(2);
   });
 });

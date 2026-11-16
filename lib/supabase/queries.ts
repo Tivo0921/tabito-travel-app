@@ -1085,8 +1085,10 @@ export async function getPurchasedPackagesForPlan(): Promise<PlanItemPackage[]> 
       package_id,
       packages!inner(
         id, image_url, spot_count, duration_minutes,
+        start_place_id, start_place_name, start_latitude, start_longitude,
+        end_place_id, end_place_name, end_latitude, end_longitude,
         areas(name),
-        package_translations(title),
+        package_translations(title, short_description),
         guides(guide_translations(name))
       )
     `)
@@ -1104,7 +1106,8 @@ export async function getPurchasedPackagesForPlan(): Promise<PlanItemPackage[]> 
   return data
     .map((row) => (Array.isArray(row.packages) ? row.packages[0] : row.packages))
     .filter((pkg): pkg is NonNullable<typeof pkg> => Boolean(pkg))
-    .map(planItemPackage);
+    // 計画に置いた直後から地図モードに出せるよう、地点と概要も載せる #30
+    .map(planItemPackageWithPlaces);
 }
 
 /**
@@ -1274,6 +1277,9 @@ export async function expandPackageIntoPlan(
       package_id: row.package_id,
       source: row.source as PlanItem['source'],
       note: row.note,
+      // 再読み込み後（getPlanItems）と同じく、展開元のパッケージ情報を載せる。
+      // 無いと展開した直後に地図モードからパッケージが消える #30
+      package: blockItem.package,
     } satisfies PlanItem)),
   };
 }
@@ -1392,8 +1398,10 @@ export async function collapsePackageInPlan(
     .from('packages')
     .select(`
       id, image_url, spot_count, duration_minutes,
+      start_place_id, start_place_name, start_latitude, start_longitude,
+      end_place_id, end_place_name, end_latitude, end_longitude,
       areas(name),
-      package_translations(title),
+      package_translations(title, short_description),
       guides(guide_translations(name))
     `)
     .eq('id', packageId)
@@ -1471,7 +1479,7 @@ export async function collapsePackageInPlan(
     package_id: block.package_id,
     source: block.source as PlanItem['source'],
     note: block.note,
-    package: planItemPackage(pkgRow),
+    package: planItemPackageWithPlaces(pkgRow),
   } satisfies PlanItem;
 }
 
