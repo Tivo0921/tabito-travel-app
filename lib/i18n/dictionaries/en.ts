@@ -192,6 +192,22 @@ export const en: Record<TranslationKey, string> = {
   'plan.itemType.shopping': 'Shopping',
   'plan.itemType.activity': 'Activity',
   'plan.itemType.other': 'Other',
+  // 計画の地図モード #30
+  'plan.view.label': 'Switch view',
+  'plan.view.timeline': 'Timeline',
+  'plan.view.map': 'Map',
+  'plan.map.unavailable': 'The map is not available right now. You can still see your plan in the timeline.',
+  'plan.map.loadFailed': 'Could not load the map. Please try again later. You can still see your plan in the timeline.',
+  'plan.map.loading': 'Loading map…',
+  'plan.map.noMarkers': 'None of the plans for this day have a location that can be shown on the map',
+  'plan.map.unplaceable': '{count} guides cannot be shown on the map (no location set, or not available right now). They are still in the timeline.',
+  'plan.map.unplaceable_one': '{count} guide cannot be shown on the map (no location set, or not available right now). It is still in the timeline.',
+  'plan.map.kind.start': 'Start point',
+  'plan.map.kind.end': 'End point',
+  'plan.map.kind.startEnd': 'Start & end point',
+  'plan.map.openGuide': 'View guide',
+  'plan.map.close': 'Close',
+  'plan.map.places': 'Places on this day',
 
   // Help
   'help.title': 'Help',
