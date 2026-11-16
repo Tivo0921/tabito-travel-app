@@ -192,6 +192,22 @@ export const ko: Record<TranslationKey, string> = {
   'plan.itemType.shopping': '쇼핑',
   'plan.itemType.activity': '체험',
   'plan.itemType.other': '기타',
+  // 計画の地図モード #30
+  'plan.view.label': '보기 전환',
+  'plan.view.timeline': '타임라인',
+  'plan.view.map': '지도',
+  'plan.map.unavailable': '지금은 지도를 사용할 수 없습니다. 일정은 타임라인에서 확인할 수 있습니다.',
+  'plan.map.loadFailed': '지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요. 일정은 타임라인에서 확인할 수 있습니다.',
+  'plan.map.loading': '지도를 불러오는 중…',
+  'plan.map.noMarkers': '이 날의 일정에는 지도에 표시할 수 있는 지점이 없습니다',
+  'plan.map.unplaceable': '지도에 표시할 수 없는 일정이 {count}개 있습니다(지점이 설정되지 않은 패키지, 직접 입력한 일정 등). 타임라인에는 표시됩니다.',
+  'plan.map.unplaceable_one': '지도에 표시할 수 없는 일정이 {count}개 있습니다(지점이 설정되지 않은 패키지, 직접 입력한 일정 등). 타임라인에는 표시됩니다.',
+  'plan.map.kind.start': '출발 지점',
+  'plan.map.kind.end': '도착 지점',
+  'plan.map.kind.startEnd': '출발·도착 지점',
+  'plan.map.openGuide': '가이드 보기',
+  'plan.map.close': '닫기',
+  'plan.map.places': '이 날의 지점',
 
   // 도움말
   'help.title': '도움말',

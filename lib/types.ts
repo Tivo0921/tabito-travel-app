@@ -205,6 +205,12 @@ export interface PlanItemPackage {
   spot_count: number;
   duration_minutes: number | null;
   guide_name: string;
+  /** パッケージの概要（package_translations.short_description）。計画の地図カード用 #30 */
+  summary?: string;
+  /** 開始地点。未設定なら null。計画の取得時だけ入れる #30 */
+  start_place?: PackagePlace | null;
+  /** 終了地点。未設定なら null。計画の取得時だけ入れる #30 */
+  end_place?: PackagePlace | null;
 }
 
 export interface Purchase {

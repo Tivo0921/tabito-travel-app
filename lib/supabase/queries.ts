@@ -802,6 +802,28 @@ function planItemPackage(row: {
   } satisfies PlanItemPackage;
 }
 
+/** 計画の地図モード用に、概要と開始・終了地点も載せる #30 */
+function planItemPackageWithPlaces(row: Parameters<typeof planItemPackage>[0] & {
+  start_place_id: string | null;
+  start_place_name: string | null;
+  start_latitude: unknown;
+  start_longitude: unknown;
+  end_place_id: string | null;
+  end_place_name: string | null;
+  end_latitude: unknown;
+  end_longitude: unknown;
+}): PlanItemPackage {
+  const t = Array.isArray(row.package_translations)
+    ? row.package_translations[0]
+    : row.package_translations;
+  return {
+    ...planItemPackage(row),
+    summary: (t as { short_description?: string | null } | null)?.short_description ?? '',
+    start_place: packagePlace(row.start_place_id, row.start_place_name, row.start_latitude, row.start_longitude),
+    end_place: packagePlace(row.end_place_id, row.end_place_name, row.end_latitude, row.end_longitude),
+  };
+}
+
 /**
  * 自分のプロフィール（表示名・自己紹介）を取る。#31
  * 表示側は profiles を読むので、編集画面もここを見る。
@@ -941,8 +963,10 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
       *,
       packages(
         id, image_url, spot_count, duration_minutes,
+        start_place_id, start_place_name, start_latitude, start_longitude,
+        end_place_id, end_place_name, end_latitude, end_longitude,
         areas(name),
-        package_translations(title),
+        package_translations(title, short_description),
         guides(guide_translations(name))
       )
     `)
@@ -979,7 +1003,7 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
       // パッケージが削除されると package_id は SET NULL になり、
       // タイトルだけが行に残る。ここも undefined になるので、
       // 表示側は「もう無いパッケージ」として描ける
-      package: pkg ? planItemPackage(pkg) : undefined,
+      package: pkg ? planItemPackageWithPlaces(pkg) : undefined,
     } satisfies PlanItem;
   });
 }
