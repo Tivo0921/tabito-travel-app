@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   ArrowUpDown,
   Pencil,
+  Map as MapIcon,
 } from 'lucide-react';
 import {
   DndContext,
@@ -40,7 +41,10 @@ import {
 } from '@dnd-kit/sortable';
 import { SortableItem } from '@/components/sortable-item';
 import { cn } from '@/lib/utils';
+import { mergeLoadedPlans, pickPlanAfterLoad } from '@/lib/plan-selection';
 import { CTAButton } from '@/components/cta-button';
+import { PlanMap } from '@/components/plan-map';
+import { buildPlanMapData } from '@/lib/plan-map';
 import {
   getMyPlans,
   createPlan,
@@ -273,7 +277,7 @@ export default function PlanPage() {
   const adviceSnapshot = useRef<string | null>(null);
   const aiInputRef = useRef<HTMLInputElement>(null);
   const [askingAi, setAskingAi] = useState(false);
-  const [aiError, setAiError] = useState<'empty' | 'rate' | 'unavailable' | 'failed' | null>(null);
+  const [aiError, setAiError] = useState<'empty' | 'rate' | 'daily' | 'unavailable' | 'failed' | null>(null);
 
   // 新規プランモーダル（2ステップ）
   const [showNewPlan, setShowNewPlan] = useState(false);
@@ -315,15 +319,25 @@ export default function PlanPage() {
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [expandError, setExpandError] = useState<'no-spots' | 'failed' | null>(null);
 
+  // タイムライン / 地図の切り替え #30。初期はタイムライン（従来の表示）
+  const [viewMode, setViewMode] = useState<'timeline' | 'map'>('timeline');
+  // 一度開いた地図は、タイムラインに戻しても破棄しない。開き直すたびに
+  // 地図を作り直すと、Maps JavaScript API の課金対象の読み込みが増えるため
+  const [mapOpened, setMapOpened] = useState(false);
+
   useEffect(() => {
     getMyPlans().then((data) => {
-      setPlans(data);
-      if (data.length > 0 && !selectedPlanId) {
-        setSelectedPlanId(data[0].id);
-      }
+      // 読み込み中に作った計画を一覧から落とさない #62。
+      // マウント時の値ではなく「今の」一覧に足すため、関数形式で更新する
+      setPlans((prev) => mergeLoadedPlans(prev, data));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 選択は常に一覧の中の計画を指すようにする。未選択（読み込み直後）なら先頭を選び、
+  // 読み込み中に選んだ・作った計画は先頭で上書きしない #62
+  useEffect(() => {
+    setSelectedPlanId((current) => pickPlanAfterLoad(current, plans));
+  }, [plans]);
 
   useEffect(() => {
     if (selectedPlanId) {
@@ -346,6 +360,14 @@ export default function PlanPage() {
   const days = Array.from({ length: dayCount }, (_, i) => i + 1);
   const itemsForDay = planItems.filter((item) => item.day === activeDay)
     .sort((a, b) => a.order - b.order);
+  // 地図は表示中の Day の予定から作る #30。毎回作り直すとマーカーが
+  // 描き直されるので、予定と Day が変わったときだけ計算する
+  const mapData = useMemo(
+    () => buildPlanMapData(
+      planItems.filter((item) => item.day === activeDay).sort((a, b) => a.order - b.order),
+    ),
+    [planItems, activeDay],
+  );
 
   /**
    * その日の最後の予定の「開始時刻 + 所要時間」を次の開始時刻として返す。
@@ -661,7 +683,12 @@ export default function PlanPage() {
         body: JSON.stringify({ planId: selectedPlanId, question: aiPrompt.trim() }),
       });
       if (res.status === 400) { setAiError('empty'); return; }
-      if (res.status === 429) { setAiError('rate'); return; }
+      if (res.status === 429) {
+        // daily_limit は1日の上限（日本時間 0:00 まで通らない）。それ以外は短時間の連打
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setAiError(data?.error === 'daily_limit' ? 'daily' : 'rate');
+        return;
+      }
       if (res.status === 503) { setAiError('unavailable'); return; }
       if (!res.ok) { setAiError('failed'); return; }
       const data = (await res.json()) as PlanAdvice;
@@ -915,6 +942,7 @@ export default function PlanPage() {
               {t(
                 aiError === 'empty' ? 'plan.ai.emptyPlan'
                 : aiError === 'rate' ? 'plan.ai.rateLimited'
+                : aiError === 'daily' ? 'plan.ai.dailyLimit'
                 : aiError === 'unavailable' ? 'plan.ai.unavailable'
                 : 'plan.ai.failed'
               )}
@@ -1010,8 +1038,39 @@ export default function PlanPage() {
                 ))}
               </div>
 
+              {/* タイムライン / 地図の切り替え #30 */}
+              <div className="px-4 pt-1">
+                <div role="group" aria-label={t('plan.view.label')} className="inline-flex p-1 rounded-xl bg-gray-100">
+                  {(['timeline', 'map'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        setViewMode(mode);
+                        if (mode === 'map') setMapOpened(true);
+                      }}
+                      aria-pressed={viewMode === mode}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                        viewMode === mode
+                          ? 'bg-white text-[var(--text-main)] shadow-sm'
+                          : 'text-[var(--text-sub)]'
+                      )}
+                    >
+                      {mode === 'timeline' ? <Clock className="w-3.5 h-3.5" /> : <MapIcon className="w-3.5 h-3.5" />}
+                      {t(mode === 'timeline' ? 'plan.view.timeline' : 'plan.view.map')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {mapOpened && (
+                <div className={cn('p-4', viewMode !== 'map' && 'hidden')}>
+                  <PlanMap data={mapData} visible={viewMode === 'map'} />
+                </div>
+              )}
+
               {/* Items for active day */}
-              <div className="p-4">
+              <div className={cn('p-4', viewMode !== 'timeline' && 'hidden')}>
                 {itemsForDay.length === 0 ? (
                   <p className="text-sm text-[var(--muted)] text-center py-4">
                     {t('plan.day.empty')}

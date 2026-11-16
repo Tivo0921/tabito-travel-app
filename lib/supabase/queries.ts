@@ -1,4 +1,5 @@
 import { createClient } from './client';
+import { normalizeGuideLanguages } from '../guide-languages';
 import type {
   Guide,
   Package,
@@ -801,6 +802,28 @@ function planItemPackage(row: {
   } satisfies PlanItemPackage;
 }
 
+/** 計画の地図モード用に、概要と開始・終了地点も載せる #30 */
+function planItemPackageWithPlaces(row: Parameters<typeof planItemPackage>[0] & {
+  start_place_id: string | null;
+  start_place_name: string | null;
+  start_latitude: unknown;
+  start_longitude: unknown;
+  end_place_id: string | null;
+  end_place_name: string | null;
+  end_latitude: unknown;
+  end_longitude: unknown;
+}): PlanItemPackage {
+  const t = Array.isArray(row.package_translations)
+    ? row.package_translations[0]
+    : row.package_translations;
+  return {
+    ...planItemPackage(row),
+    summary: (t as { short_description?: string | null } | null)?.short_description ?? '',
+    start_place: packagePlace(row.start_place_id, row.start_place_name, row.start_latitude, row.start_longitude),
+    end_place: packagePlace(row.end_place_id, row.end_place_name, row.end_latitude, row.end_longitude),
+  };
+}
+
 /**
  * 自分のプロフィール（表示名・自己紹介）を取る。#31
  * 表示側は profiles を読むので、編集画面もここを見る。
@@ -940,8 +963,10 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
       *,
       packages(
         id, image_url, spot_count, duration_minutes,
+        start_place_id, start_place_name, start_latitude, start_longitude,
+        end_place_id, end_place_name, end_latitude, end_longitude,
         areas(name),
-        package_translations(title),
+        package_translations(title, short_description),
         guides(guide_translations(name))
       )
     `)
@@ -978,7 +1003,7 @@ export async function getPlanItems(planId: string): Promise<PlanItem[]> {
       // パッケージが削除されると package_id は SET NULL になり、
       // タイトルだけが行に残る。ここも undefined になるので、
       // 表示側は「もう無いパッケージ」として描ける
-      package: pkg ? planItemPackage(pkg) : undefined,
+      package: pkg ? planItemPackageWithPlaces(pkg) : undefined,
     } satisfies PlanItem;
   });
 }
@@ -1060,8 +1085,10 @@ export async function getPurchasedPackagesForPlan(): Promise<PlanItemPackage[]> 
       package_id,
       packages!inner(
         id, image_url, spot_count, duration_minutes,
+        start_place_id, start_place_name, start_latitude, start_longitude,
+        end_place_id, end_place_name, end_latitude, end_longitude,
         areas(name),
-        package_translations(title),
+        package_translations(title, short_description),
         guides(guide_translations(name))
       )
     `)
@@ -1079,7 +1106,8 @@ export async function getPurchasedPackagesForPlan(): Promise<PlanItemPackage[]> 
   return data
     .map((row) => (Array.isArray(row.packages) ? row.packages[0] : row.packages))
     .filter((pkg): pkg is NonNullable<typeof pkg> => Boolean(pkg))
-    .map(planItemPackage);
+    // 計画に置いた直後から地図モードに出せるよう、地点と概要も載せる #30
+    .map(planItemPackageWithPlaces);
 }
 
 /**
@@ -1249,6 +1277,9 @@ export async function expandPackageIntoPlan(
       package_id: row.package_id,
       source: row.source as PlanItem['source'],
       note: row.note,
+      // 再読み込み後（getPlanItems）と同じく、展開元のパッケージ情報を載せる。
+      // 無いと展開した直後に地図モードからパッケージが消える #30
+      package: blockItem.package,
     } satisfies PlanItem)),
   };
 }
@@ -1367,8 +1398,10 @@ export async function collapsePackageInPlan(
     .from('packages')
     .select(`
       id, image_url, spot_count, duration_minutes,
+      start_place_id, start_place_name, start_latitude, start_longitude,
+      end_place_id, end_place_name, end_latitude, end_longitude,
       areas(name),
-      package_translations(title),
+      package_translations(title, short_description),
       guides(guide_translations(name))
     `)
     .eq('id', packageId)
@@ -1446,7 +1479,7 @@ export async function collapsePackageInPlan(
     package_id: block.package_id,
     source: block.source as PlanItem['source'],
     note: block.note,
-    package: planItemPackage(pkgRow),
+    package: planItemPackageWithPlaces(pkgRow),
   } satisfies PlanItem;
 }
 
@@ -1730,7 +1763,8 @@ export async function registerAsGuide(
 
   // 0個は誰にも案内できない状態になるので作らせない。
   // updateMyGuideProfile 側にも同じ境界があり、片方だけ抜けていた
-  const normalizedLanguages = languages.filter(Boolean);
+  // 言語コード以外（'日本語' などの表示名）を DB に入れない #47
+  const normalizedLanguages = normalizeGuideLanguages(languages);
   if (normalizedLanguages.length === 0) return null;
 
   const avatarUrl = user.user_metadata?.avatar_url ?? null;
@@ -1838,8 +1872,9 @@ export async function updateMyGuideProfile(
   const location = input.location.trim();
 
   // 0個は誰にも案内できない状態になるので保存しない。UI 側でも
-  // 最後の1つを外せないようにしているが、境界はここで決める
-  const languages = input.languages.filter(Boolean);
+  // 最後の1つを外せないようにしているが、境界はここで決める。
+  // 言語コード以外（'日本語' などの表示名）は読み替えるか落とす #47
+  const languages = normalizeGuideLanguages(input.languages);
   if (languages.length === 0) return 'error';
 
   const { data, error } = await supabase

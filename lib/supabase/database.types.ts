@@ -34,6 +34,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_usage: {
+        Row: {
+          count: number
+          day: string
+          kind: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          count?: number
+          day: string
+          kind: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          count?: number
+          day?: string
+          kind?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       areas: {
         Row: {
           created_at: string
@@ -1106,6 +1130,16 @@ export type Database = {
         Args: { item_ids: string[]; times: string[] }
         Returns: undefined
       }
+      consume_api_usage: {
+        Args: {
+          p_global_limit?: number
+          p_kind: string
+          p_now?: string
+          p_user_id: string
+          p_user_limit: number
+        }
+        Returns: string | null
+      }
       get_chat_thread_summaries: {
         Args: never
         Returns: {
@@ -1125,6 +1159,15 @@ export type Database = {
       }
       recalc_package_rating: {
         Args: { target_package_id: string }
+        Returns: undefined
+      }
+      release_api_usage: {
+        Args: {
+          p_day: string
+          p_include_global?: boolean
+          p_kind: string
+          p_user_id: string
+        }
         Returns: undefined
       }
       reorder_plan_items: { Args: { item_ids: string[] }; Returns: undefined }

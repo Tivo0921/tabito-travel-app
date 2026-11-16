@@ -15,6 +15,8 @@ export default function AboutPage() {
   const links = [
     { label: t('settings.item.terms'), href: '/settings/terms' },
     { label: t('privacy.policy'), href: '/settings/privacy/policy' },
+    { label: t('settings.item.legal'), href: '/settings/legal' },
+    { label: t('settings.item.refund'), href: '/settings/refund' },
     { label: t('about.helpContact'), href: '/help' },
   ];
 

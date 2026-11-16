@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { PlaceCandidate } from '@/lib/types';
+import { consumeDailyUsage, readLimit } from '@/lib/usage-limit';
 
 /**
  * Google Places (New) Text Search の中継。
@@ -36,6 +37,14 @@ const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
  */
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 20;
+
+/**
+ * 1日の上限（日本時間 0:00 で切り替え）の既定値。#66
+ * こちらは DB に保存するので、インスタンス数や再起動に左右されない。
+ * アカウントを増やして回避されないよう、サービス全体の合計にも上限を置く
+ */
+const DEFAULT_DAILY_LIMIT = 100;
+const DEFAULT_GLOBAL_DAILY_LIMIT = 1000;
 
 const recentCalls = new Map<string, number[]>();
 
@@ -120,6 +129,23 @@ export async function POST(req: NextRequest) {
     // 呼び出し側は unavailable を見て「地点検索は使えません」と出す
     console.error('places/search: GOOGLE_MAPS_API_KEY is not set');
     return NextResponse.json({ error: 'unavailable' }, { status: 503 });
+  }
+
+  // Google を呼ぶ直前に数える。短すぎる語やキー未設定では消費させない。
+  // 上流の失敗でも戻さない（Google 側で課金される失敗もあり、戻すと
+  // 失敗する検索を上限なく繰り返せるため）
+  const usage = await consumeDailyUsage({
+    kind: 'places_search',
+    userId: user.id,
+    userLimit: readLimit(process.env.PLACES_DAILY_LIMIT, DEFAULT_DAILY_LIMIT),
+    globalLimit: readLimit(process.env.PLACES_GLOBAL_DAILY_LIMIT, DEFAULT_GLOBAL_DAILY_LIMIT),
+  });
+  if (!usage.ok) {
+    if (usage.reason === 'limit') {
+      return NextResponse.json({ error: 'daily_limit' }, { status: 429 });
+    }
+    // 数えられないときは通さない。上限を確かめずに課金 API を呼ばない
+    return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 
   let res: Response;
