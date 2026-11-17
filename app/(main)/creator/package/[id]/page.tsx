@@ -362,9 +362,7 @@ export default function CreatorPackagePage({ params }: { params: Promise<{ id: s
           {saveError && (
             <p role="alert" className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">
               {t(
-                saveError === 'forbidden' ? 'pkgEdit.saveFailed'
-                : saveError === 'partial' ? 'pkgEdit.savePartial'
-                : 'pkgEdit.saveError'
+                saveError === 'forbidden' ? 'pkgEdit.saveFailed' : 'pkgEdit.saveError'
               )}
             </p>
           )}
